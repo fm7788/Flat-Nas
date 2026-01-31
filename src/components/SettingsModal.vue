@@ -1645,6 +1645,50 @@ watch(activeTab, (val) => {
                   </button>
                 </div>
               </div>
+              <div class="mb-2">
+                <h5 class="text-sm font-medium text-gray-700 mb-2">WEB端布局</h5>
+                <div
+                  class="flex items-center justify-between border border-gray-200 rounded-xl p-3"
+                >
+                  <span class="text-sm font-bold text-gray-900">展现方式</span>
+                  <div
+                    class="relative h-9 w-[180px] rounded-full bg-gray-100/90 p-1 flex items-center select-none shadow-inner focus-within:ring-2 focus-within:ring-green-300/60 focus-within:ring-offset-2 focus-within:ring-offset-white/60"
+                  >
+                    <div
+                      class="absolute top-1 bottom-1 left-1 w-[calc(50%-4px)] rounded-full bg-green-500 shadow-sm shadow-green-500/25 transition-transform duration-200"
+                      :class="
+                        store.appConfig.webGroupPagination
+                          ? 'translate-x-[calc(100%+4px)]'
+                          : 'translate-x-0'
+                      "
+                    ></div>
+                    <button
+                      type="button"
+                      class="relative z-10 w-1/2 h-full text-xs font-bold rounded-full transition-colors focus-visible:outline-none"
+                      :class="
+                        store.appConfig.webGroupPagination
+                          ? 'text-gray-600 hover:text-gray-800'
+                          : 'text-white'
+                      "
+                      @click="store.appConfig.webGroupPagination = false"
+                    >
+                      一栏页
+                    </button>
+                    <button
+                      type="button"
+                      class="relative z-10 w-1/2 h-full text-xs font-bold rounded-full transition-colors focus-visible:outline-none"
+                      :class="
+                        store.appConfig.webGroupPagination
+                          ? 'text-white'
+                          : 'text-gray-600 hover:text-gray-800'
+                      "
+                      @click="store.appConfig.webGroupPagination = true"
+                    >
+                      按组分页
+                    </button>
+                  </div>
+                </div>
+              </div>
               <div class="grid grid-cols-2 gap-4">
                 <div>
                   <h4 class="text-sm font-medium text-gray-700 mb-1">标题大小</h4>
@@ -3780,7 +3824,7 @@ document.querySelector('.card-item').addEventListener('click', () => {
                   v-if="store.hasUpdate && store.isLogged"
                   class="w-2 h-2 bg-gray-900 rounded-full cursor-pointer"
                   title="发现新版本"
-                  @click="store.checkUpdate"
+                  @click="store.checkUpdate(true)"
                 ></span>
               </div>
               <div class="text-xs text-gray-500">QQ群:613835409</div>

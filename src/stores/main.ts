@@ -129,9 +129,11 @@ export const useMainStore = defineStore("main", () => {
   };
 
   // Version Check
-  const currentVersion = "1.0.74dev3";
+  const currentVersion = "1.0.74";
   const latestVersion = ref("");
   const dockerUpdateAvailable = ref(false);
+  const updateCheckLastAt = useStorage<number>("flat-nas-update-check-last-at", 0);
+  const UPDATE_CHECK_TTL = 30 * 60 * 1000;
 
   const hasUpdate = computed(() => {
     if (dockerUpdateAvailable.value) return true;
@@ -141,14 +143,24 @@ export const useMainStore = defineStore("main", () => {
     return v1 !== v2;
   });
 
-  const checkUpdate = async () => {
+  const checkUpdate = async (force = false) => {
     try {
-      // Use Gitee tags API to avoid connection issues in China
-      const res = await fetch("https://gitee.com/api/v5/repos/gjx0808/FlatNas/tags");
-      if (res.ok) {
-        const data = await res.json();
-        if (data.length > 0) {
-          latestVersion.value = data[0].name;
+      const now = Date.now();
+      const shouldCheckRemote =
+        force ||
+        !updateCheckLastAt.value ||
+        now - updateCheckLastAt.value >= UPDATE_CHECK_TTL ||
+        !latestVersion.value;
+
+      if (shouldCheckRemote) {
+        updateCheckLastAt.value = now;
+        // Use Gitee tags API to avoid connection issues in China
+        const res = await fetch("https://gitee.com/api/v5/repos/gjx0808/FlatNas/tags");
+        if (res.ok) {
+          const data = await res.json();
+          if (data.length > 0) {
+            latestVersion.value = data[0].name;
+          }
         }
       }
     } catch (e) {
@@ -249,6 +261,7 @@ export const useMainStore = defineStore("main", () => {
     wallpaperMobileImageBase: "/mobile_backgrounds",
     mobileWallpaperOrder: [],
     sidebarViewMode: "bookmarks",
+    webGroupPagination: false,
     empireMode: false,
     customCss: "",
     customJs: "",

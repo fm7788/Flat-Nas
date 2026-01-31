@@ -97,6 +97,7 @@ export interface AppConfig {
   mobileRotationInterval?: number;
   mobileRotationMode?: "random" | "sequential";
   deviceMode?: "auto" | "desktop" | "tablet" | "mobile";
+  webGroupPagination?: boolean;
   backgroundBlur?: number;
   backgroundMask?: number;
   mobileBackgroundBlur?: number;

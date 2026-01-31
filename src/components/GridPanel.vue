@@ -46,6 +46,7 @@ const SizeSelector = defineAsyncComponent(() => import("./SizeSelector.vue"));
 
 const store = useMainStore();
 useWallpaperRotation();
+const { deviceKey, isMobile } = useDevice(toRef(store.appConfig, "deviceMode"));
 const { width, height } = useWindowSize();
 const isHeaderRowLayout = computed(() => width.value >= 1280);
 
@@ -60,6 +61,27 @@ const isEditMode = ref(false);
 const activeResizeWidgetId = ref<string | null>(null);
 const currentEditItem = ref<NavItem | null>(null);
 const currentGroupId = ref<string>("");
+const activePaginationGroupId = ref<string>("");
+const isWebPaginationMode = computed(() => store.appConfig.webGroupPagination && !isMobile.value);
+const mainContainerRef = ref<HTMLElement | null>(null);
+
+watch(
+  [() => store.groups, isWebPaginationMode],
+  ([groups, mode]) => {
+    if (mode && groups.length > 0) {
+      if (
+        !activePaginationGroupId.value ||
+        !groups.find((g) => g.id === activePaginationGroupId.value)
+      ) {
+        const first = groups[0];
+        if (first) {
+          activePaginationGroupId.value = first.id;
+        }
+      }
+    }
+  },
+  { immediate: true, deep: true },
+);
 
 watch(showGroupSettingsModal, (val) => {
   isEditMode.value = val;
@@ -311,7 +333,6 @@ const draggableWidgets = computed({
 const layoutData = ref<GridLayoutItem[]>([]);
 let skipNextLayoutSave = false;
 let isInternalUpdate = false;
-const { deviceKey, isMobile } = useDevice(toRef(store.appConfig, "deviceMode"));
 const isHandheld = computed(() => deviceKey.value === "mobile" || deviceKey.value === "tablet");
 const checkVisible = (obj?: WidgetConfig | NavItem) => {
   if (!obj) return false;
@@ -329,6 +350,35 @@ const widgetColNum = computed(() => {
 const rowHeight = computed(() =>
   deviceKey.value === "mobile" ? 120 : deviceKey.value === "tablet" ? 130 : 140,
 );
+
+const compactVertical = (layout: GridLayoutItem[]) => {
+  const collides = (a: GridLayoutItem, b: GridLayoutItem) =>
+    a.i !== b.i && a.x < b.x + b.w && a.x + a.w > b.x && a.y < b.y + b.h && a.y + a.h > b.y;
+
+  const canPlace = (item: GridLayoutItem, placed: GridLayoutItem[]) =>
+    !placed.some((p) => collides(item, p));
+
+  const sorted = [...layout].sort((a, b) => a.y - b.y || a.x - b.x);
+  const placed: GridLayoutItem[] = [];
+  const compacted: GridLayoutItem[] = [];
+
+  for (const item of sorted) {
+    const originalY = Math.max(0, item.y || 0);
+    let next = { ...item, y: originalY };
+    for (let y = 0; y < originalY; y++) {
+      const candidate = { ...next, y };
+      if (canPlace(candidate, placed)) {
+        next = candidate;
+        break;
+      }
+    }
+    placed.push(next);
+    compacted.push(next);
+  }
+
+  const byId = new Map(compacted.map((it) => [it.i, it] as const));
+  return layout.map((it) => byId.get(it.i) || it);
+};
 
 watch(
   () => [store.widgets, widgetColNum.value, deviceKey.value],
@@ -402,7 +452,7 @@ watch(
 
     // 标记为程序化布局更新，避免触发保存循环
     skipNextLayoutSave = true;
-    layoutData.value = generateLayout(widgetsToLayout, colNum);
+    layoutData.value = compactVertical(generateLayout(widgetsToLayout, colNum));
   },
   { deep: true, immediate: true },
 );
@@ -486,6 +536,74 @@ const displayGroups = computed(() => {
       if (store.isLogged) return true;
       return g.items.length > 0 || !!g.preset;
     });
+});
+
+const paginationWheelLockUntil = ref(0);
+const getScrollElement = () => {
+  if (typeof document === "undefined") return null;
+  return (document.scrollingElement ||
+    document.documentElement ||
+    document.body) as HTMLElement | null;
+};
+const movePaginationGroup = (step: number) => {
+  const groups = displayGroups.value;
+  if (groups.length === 0) return;
+  const ids = groups.map((g) => g.id);
+  let idx = ids.indexOf(activePaginationGroupId.value);
+  if (idx < 0) idx = 0;
+  const nextId = ids[(idx + step + ids.length) % ids.length];
+  if (nextId) activePaginationGroupId.value = nextId;
+};
+const handleWebPaginationWheel = (e: WheelEvent) => {
+  if (!isWebPaginationMode.value) return;
+  if (isEditMode.value) return;
+  if (
+    showEditModal.value ||
+    showSettingsModal.value ||
+    showGroupSettingsModal.value ||
+    showLoginModal.value
+  )
+    return;
+  if (e.ctrlKey || e.metaKey || e.shiftKey) return;
+  if (!e.deltaY) return;
+
+  const now = Date.now();
+  if (now < paginationWheelLockUntil.value) return;
+
+  const scrollEl = getScrollElement();
+  if (!scrollEl) return;
+
+  const canScroll = scrollEl.scrollHeight - scrollEl.clientHeight > 2;
+  const atTop = scrollEl.scrollTop <= 0;
+  const atBottom = scrollEl.scrollTop + scrollEl.clientHeight >= scrollEl.scrollHeight - 1;
+  const shouldPaginate = !canScroll || (e.deltaY < 0 ? atTop : atBottom);
+  if (!shouldPaginate) return;
+
+  e.preventDefault();
+  e.stopPropagation();
+
+  paginationWheelLockUntil.value = now + 320;
+  movePaginationGroup(e.deltaY > 0 ? 1 : -1);
+};
+
+watch(
+  [activePaginationGroupId, isWebPaginationMode],
+  ([, mode]) => {
+    if (!mode) return;
+    nextTick(() => {
+      const el = getScrollElement();
+      el?.scrollTo({ top: 0 });
+    });
+  },
+  { flush: "post" },
+);
+
+onMounted(() => {
+  mainContainerRef.value?.addEventListener("wheel", handleWebPaginationWheel, { passive: false });
+});
+
+onUnmounted(() => {
+  mainContainerRef.value?.removeEventListener("wheel", handleWebPaginationWheel);
 });
 
 const cycleWidgetSize = (widget: WidgetConfig) => {
@@ -1954,6 +2072,7 @@ onMounted(() => {
 
     <div
       class="flex-1 w-full p-4 md:p-8 transition-all pb-[calc(2rem+env(safe-area-inset-bottom))] md:pb-[calc(2.5rem+env(safe-area-inset-bottom))] relative z-10"
+      ref="mainContainerRef"
       :style="{
         backgroundColor:
           store.appConfig.background || store.appConfig.solidBackgroundColor
@@ -1971,7 +2090,8 @@ onMounted(() => {
         :class="store.isExpandedMode ? 'max-w-[95%]' : 'max-w-7xl'"
       >
         <div
-          class="flex flex-col xl:flex-row xl:justify-between items-center mb-10 gap-6 relative flatnas-header-container"
+          class="flex flex-col xl:flex-row xl:justify-between items-center gap-6 relative flatnas-header-container"
+          :class="isWebPaginationMode ? 'mb-4' : 'mb-10'"
         >
           <div
             class="flex flex-col sm:flex-row items-center gap-2 sm:gap-4 flex-shrink-0 z-30 transition-all duration-500"
@@ -2155,6 +2275,31 @@ onMounted(() => {
           </div>
         </div>
 
+        <VueDraggable
+          v-if="isWebPaginationMode"
+          v-model="store.groups"
+          class="mb-3 flex items-center gap-2 overflow-x-auto scrollbar-hide py-1"
+          :group="{ name: 'pagination-groups', pull: false, put: false }"
+          :sort="isEditMode && !searchText"
+          :disabled="!isEditMode || !!searchText"
+          @end="() => store.saveData()"
+        >
+          <button
+            v-for="group in displayGroups"
+            :key="group.id"
+            type="button"
+            @click="activePaginationGroupId = group.id"
+            class="shrink-0 h-9 px-3.5 rounded-xl text-sm font-medium backdrop-blur-md transition-colors border shadow-sm bg-white/10 text-white/75 hover:bg-white/15 hover:text-white/90 active:bg-white/20 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/35 focus-visible:ring-offset-2 focus-visible:ring-offset-black/30"
+            :class="
+              activePaginationGroupId === group.id
+                ? 'bg-white/22 border-white/35 text-white shadow-[0_6px_18px_rgba(0,0,0,0.18)] ring-1 ring-white/35'
+                : 'border-white/12'
+            "
+          >
+            {{ group.title }}
+          </button>
+        </VueDraggable>
+
         <GridLayout
           v-if="layoutData.length > 0"
           v-model:layout="layoutData"
@@ -2330,9 +2475,9 @@ onMounted(() => {
           :move="checkMove"
           :animation="300"
           :forceFallback="true"
-          :disabled="!isEditMode"
+          :disabled="!isEditMode || isWebPaginationMode"
           @end="() => store.saveData()"
-          class="pb-20 flex flex-col"
+          class="pb-20 flex flex-col transition-all"
           :style="{ gap: (store.appConfig.groupGap ?? 30) + 'px' }"
         >
           <div
@@ -2340,6 +2485,7 @@ onMounted(() => {
             :key="group.id"
             class="group-container"
             :id="'group-' + group.id"
+            v-show="!isWebPaginationMode || group.id === activePaginationGroupId"
           >
             <div
               class="flex items-center gap-3 mb-2 group-header relative transition-opacity duration-200"

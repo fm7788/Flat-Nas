@@ -2737,13 +2737,20 @@ app.post("/api/transfer/upload/init", authenticateToken, express.json(), async (
   if (!req.user) return res.status(401).json({ error: "Unauthorized" });
   try {
     const { fileName, size, mime, fileKey, chunkSize } = req.body;
+
+    // Security: Sanitize fileName to prevent Path Traversal
+    const safeFileName = path.basename(fileName);
+    if (safeFileName !== fileName) {
+      console.warn(`[Security] Path traversal attempt detected: ${fileName} -> ${safeFileName}`);
+    }
+
     const uploadId = crypto.randomUUID();
     const uploadDir = path.join(TRANSFER_CHUNKS, uploadId);
     await ensureDir(uploadDir);
 
     // Store metadata
     const meta = {
-      fileName,
+      fileName: safeFileName,
       size,
       mime,
       fileKey,

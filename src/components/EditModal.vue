@@ -602,7 +602,8 @@ const autoFetchIcon = async () => {
     const candidates = [
       `https://www.favicon.vip/get.php?url=${encodeURIComponent(targetUrl)}`,
       `https://icon.bqb.cool?url=${encodeURIComponent(targetUrl)}`,
-      `https://icons.duckduckgo.com/ip3/${urlObj.hostname}.ico`,
+      `https://api.afmax.cn/so/ico/index.php?r=${encodeURIComponent(targetUrl)}`,
+      `https://api.quickso.cn/api/favicon/index.php?url=${encodeURIComponent(targetUrl)}`,
       `${urlObj.origin}/favicon.ico`,
     ];
 
@@ -764,15 +765,16 @@ const processIconError = () => {
     !val.includes("favicon.ico") &&
     !val.includes("api.uomg.com") &&
     !val.includes("simpleicons.org") &&
-    !val.includes("duckduckgo.com") &&
+    !val.includes("api.afmax.cn") &&
+    !val.includes("api.quickso.cn") &&
     !val.includes("favicon.vip") &&
     !val.includes("icon.bqb.cool")
   ) {
     console.log("Icon load failed, trying to fallback to reliable API:", val);
     try {
       const urlObj = new URL(val);
-      // 尝试使用 DuckDuckGo API，它比直接访问 favicon.ico 更可靠且不会产生 404 错误日志（会返回默认图标）
-      form.value.icon = `https://icons.duckduckgo.com/ip3/${urlObj.hostname}.ico`;
+      // 尝试使用 Afmax API，它比直接访问 favicon.ico 更可靠且不会产生 404 错误日志
+      form.value.icon = `https://api.afmax.cn/so/ico/index.php?r=https://${urlObj.hostname}`;
       return;
     } catch {
       // ignore

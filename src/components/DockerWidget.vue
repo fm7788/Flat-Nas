@@ -724,7 +724,11 @@ const isAutoUpdateDisabled = (id: string) => {
 
 const toggleAutoUpdateDisabled = (id: string, disabled: boolean) => {
   if (!props.widget) return;
-  if (!props.widget.data) props.widget.data = {};
+
+  const widgetInStore = store.widgets.find((w) => w.id === props.widget!.id);
+  if (!widgetInStore) return;
+
+  if (!widgetInStore.data) widgetInStore.data = {};
 
   const list = new Set(getDisabledContainers());
   if (disabled) {
@@ -733,7 +737,7 @@ const toggleAutoUpdateDisabled = (id: string, disabled: boolean) => {
     list.delete(id);
   }
 
-  props.widget.data.disabledContainers = Array.from(list);
+  widgetInStore.data.disabledContainers = Array.from(list);
   store.saveData();
 
   showToast(disabled ? "已禁止该容器自动升级" : "已恢复该容器自动升级");
