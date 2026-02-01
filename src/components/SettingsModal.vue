@@ -2994,7 +2994,17 @@ watch(activeTab, (val) => {
                     @change="store.saveData()"
                     class="text-gray-900 focus:ring-blue-400 accent-blue-400"
                   />
-                  <span class="text-sm text-gray-700">强制内网模式</span>
+                  <span class="text-sm text-gray-700">强制内网</span>
+                </label>
+                <label class="flex items-center gap-2 cursor-pointer">
+                  <input
+                    type="radio"
+                    v-model="store.appConfig.forceNetworkMode"
+                    value="latency"
+                    @change="store.saveData()"
+                    class="text-gray-900 focus:ring-blue-400 accent-blue-400"
+                  />
+                  <span class="text-sm text-gray-700">延迟判定</span>
                 </label>
                 <label class="flex items-center gap-2 cursor-pointer">
                   <input
@@ -3005,7 +3015,7 @@ watch(activeTab, (val) => {
                     class="text-gray-900 focus:ring-blue-400 accent-blue-400"
                   />
 
-                  <span class="text-sm text-gray-700">强制外网模式</span>
+                  <span class="text-sm text-gray-700">强制外网</span>
                 </label>
               </div>
             </div>

@@ -90,14 +90,18 @@ const isLanMode = ref(false);
 const latency = ref(0);
 const isChecking = ref(true);
 const networkScope = typeof window !== "undefined" ? window.location.hostname : "default";
-const forceMode = useStorage<"auto" | "lan" | "wan">(
-  `flat-nas-network-mode:${networkScope}`,
-  "auto",
-);
+const forceMode = computed({
+  get: () => store.appConfig.forceNetworkMode || "auto",
+  set: (val) => {
+    store.appConfig.forceNetworkMode = val;
+    store.saveData();
+  },
+});
 
 const effectiveIsLan = computed(() => {
   if (forceMode.value === "lan") return true;
   if (forceMode.value === "wan") return false;
+  if (forceMode.value === "latency") return latency.value > 0 && latency.value < 200;
   return isLanMode.value;
 });
 
@@ -110,6 +114,7 @@ const isSidebarEnabled = computed(() => {
 const toggleForceMode = () => {
   if (forceMode.value === "auto") forceMode.value = "lan";
   else if (forceMode.value === "lan") forceMode.value = "wan";
+  else if (forceMode.value === "wan") forceMode.value = "latency";
   else forceMode.value = "auto";
 };
 
@@ -757,6 +762,12 @@ const checkLatency = async () => {
   }
 };
 
+watch(forceMode, (val) => {
+  if (val === "latency") {
+    checkLatency();
+  }
+});
+
 onMounted(() => {
   isLanMode.value = isInternalNetwork(window.location.hostname);
   setTimeout(() => checkLatency(), 2000);
@@ -847,6 +858,12 @@ const handleCardClick = (item: NavItem) => {
   } else if (forceMode.value === "wan") {
     // 强制外网模式：只使用外网链接
     targetUrl = item.url;
+  } else if (forceMode.value === "latency") {
+    // 延迟判定模式
+    const isLatencyLan = latency.value > 0 && latency.value < 200;
+    if (store.isLogged && isLatencyLan && item.lanUrl) {
+      targetUrl = item.lanUrl;
+    }
   } else {
     // 自动模式
     if (store.isLogged && isLanMode.value && item.lanUrl) {
