@@ -95,8 +95,10 @@ const iconSrc = ref("");
 
 // Ensure Docker Widget Exists
 onMounted(async () => {
+  if (import.meta.env.MODE === "test") return;
   try {
-    const response = await fetch("/base644.txt");
+    const base = typeof window !== "undefined" ? window.location.origin : "http://localhost";
+    const response = await fetch(new URL("/base644.txt", base).toString());
     if (response.ok) {
       const text = await response.text();
       iconSrc.value = text.trim();
@@ -1259,6 +1261,27 @@ const addCountdownWidget = () => {
   store.saveData();
 };
 
+const addCountUpWidget = () => {
+  const newId = "w-cup-" + Date.now();
+  store.widgets.push({
+    id: newId,
+    type: "countup",
+    enable: true,
+    data: {
+      startTime: new Date().toISOString().slice(0, 16),
+      title: "正计时",
+      style: "card",
+      isRunning: false,
+      totalPauseDuration: 0,
+      pauseStartTime: null,
+    },
+    colSpan: 1,
+    rowSpan: 1,
+    isPublic: true,
+  });
+  store.saveData();
+};
+
 const removeWidget = (id: string) => {
   widgetToDeleteId.value = id;
   showDeleteWidgetConfirm.value = true;
@@ -1651,40 +1674,60 @@ watch(activeTab, (val) => {
                   class="flex items-center justify-between border border-gray-200 rounded-xl p-3"
                 >
                   <span class="text-sm font-bold text-gray-900">展现方式</span>
-                  <div
-                    class="relative h-9 w-[180px] rounded-full bg-gray-100/90 p-1 flex items-center select-none shadow-inner focus-within:ring-2 focus-within:ring-green-300/60 focus-within:ring-offset-2 focus-within:ring-offset-white/60"
-                  >
+                  <div class="flex items-center gap-2">
                     <div
-                      class="absolute top-1 bottom-1 left-1 w-[calc(50%-4px)] rounded-full bg-green-500 shadow-sm shadow-green-500/25 transition-transform duration-200"
-                      :class="
-                        store.appConfig.webGroupPagination
-                          ? 'translate-x-[calc(100%+4px)]'
-                          : 'translate-x-0'
-                      "
-                    ></div>
+                      class="relative h-9 w-[180px] rounded-full bg-gray-100/90 p-1 flex items-center select-none shadow-inner focus-within:ring-2 focus-within:ring-green-300/60 focus-within:ring-offset-2 focus-within:ring-offset-white/60"
+                    >
+                      <div
+                        class="absolute top-1 bottom-1 left-1 w-[calc(50%-4px)] rounded-full bg-green-500 shadow-sm shadow-green-500/25 transition-transform duration-200"
+                        :class="
+                          store.appConfig.webGroupPagination
+                            ? 'translate-x-[calc(100%+4px)]'
+                            : 'translate-x-0'
+                        "
+                      ></div>
+                      <button
+                        type="button"
+                        class="relative z-10 w-1/2 h-full text-xs font-bold rounded-full transition-colors focus-visible:outline-none"
+                        :class="
+                          store.appConfig.webGroupPagination
+                            ? 'text-gray-600 hover:text-gray-800'
+                            : 'text-white'
+                        "
+                        @click="store.appConfig.webGroupPagination = false"
+                      >
+                        一栏页
+                      </button>
+                      <button
+                        type="button"
+                        class="relative z-10 w-1/2 h-full text-xs font-bold rounded-full transition-colors focus-visible:outline-none"
+                        :class="
+                          store.appConfig.webGroupPagination
+                            ? 'text-white'
+                            : 'text-gray-600 hover:text-gray-800'
+                        "
+                        @click="store.appConfig.webGroupPagination = true"
+                      >
+                        按组分页
+                      </button>
+                    </div>
                     <button
                       type="button"
-                      class="relative z-10 w-1/2 h-full text-xs font-bold rounded-full transition-colors focus-visible:outline-none"
+                      class="h-9 px-3 rounded-xl text-xs font-bold border transition-colors focus-visible:outline-none"
+                      :disabled="!store.appConfig.webGroupPagination"
                       :class="
-                        store.appConfig.webGroupPagination
-                          ? 'text-gray-600 hover:text-gray-800'
-                          : 'text-white'
+                        !store.appConfig.webGroupPagination
+                          ? 'bg-gray-50 text-gray-300 border-gray-100 cursor-not-allowed'
+                          : store.appConfig.webGroupPaginationDisableFlip
+                            ? 'bg-red-500 text-white border-red-500 hover:bg-red-600'
+                            : 'bg-white text-gray-700 border-gray-200 hover:bg-gray-50'
                       "
-                      @click="store.appConfig.webGroupPagination = false"
-                    >
-                      一栏页
-                    </button>
-                    <button
-                      type="button"
-                      class="relative z-10 w-1/2 h-full text-xs font-bold rounded-full transition-colors focus-visible:outline-none"
-                      :class="
-                        store.appConfig.webGroupPagination
-                          ? 'text-white'
-                          : 'text-gray-600 hover:text-gray-800'
+                      @click="
+                        store.appConfig.webGroupPaginationDisableFlip =
+                          !store.appConfig.webGroupPaginationDisableFlip
                       "
-                      @click="store.appConfig.webGroupPagination = true"
                     >
-                      按组分页
+                      禁止翻页
                     </button>
                   </div>
                 </div>
@@ -2233,13 +2276,15 @@ watch(activeTab, (val) => {
                                                                 ? "万能窗口"
                                                                 : w.type === "countdown"
                                                                   ? "倒计时"
-                                                                  : w.type === "docker"
-                                                                    ? "Docker 管理"
-                                                                    : w.type === "custom-css"
-                                                                      ? "自定义组件"
-                                                                      : w.type === "music"
-                                                                        ? "道理鱼音乐"
-                                                                        : `未知组件 (${w.type})`
+                                                                  : w.type === "countup"
+                                                                    ? "正计时"
+                                                                    : w.type === "docker"
+                                                                      ? "Docker 管理"
+                                                                      : w.type === "custom-css"
+                                                                        ? "自定义组件"
+                                                                        : w.type === "music"
+                                                                          ? "道理鱼音乐"
+                                                                          : `未知组件 (${w.type})`
                           }}
                         </span>
                       </template>
@@ -2925,6 +2970,116 @@ watch(activeTab, (val) => {
                     <input
                       v-model="w.data.targetDate"
                       type="datetime-local"
+                      class="w-full px-3 py-2 border border-gray-200 rounded-lg text-xs focus:border-gray-900 outline-none"
+                    />
+                  </div>
+                </div>
+              </div>
+            </template>
+
+            <!-- CountUp Widget Section -->
+            <div class="flex items-center justify-between mb-4 border-b border-gray-100 pb-4 mt-8">
+              <div class="flex items-center gap-2">
+                <h4 class="text-base font-bold text-gray-900 border-l-4 border-gray-900 pl-3">
+                  正计时
+                </h4>
+                <span class="text-xs text-gray-500 bg-gray-100 px-2 py-1 rounded-full">可多开</span>
+                <button
+                  @click="addCountUpWidget"
+                  class="px-3 py-1.5 text-xs font-medium bg-gray-100 text-gray-900 rounded-lg hover:bg-gray-200 transition-colors flex items-center gap-1 ml-2"
+                >
+                  <span class="text-base leading-none">+</span> 新增正计时
+                </button>
+              </div>
+            </div>
+
+            <template v-for="w in store.widgets" :key="'cup-' + w.id">
+              <div
+                v-if="w.type === 'countup'"
+                class="flatnas-handshake-signal flex flex-col gap-3 p-4 border border-gray-100 rounded-xl bg-gray-50 hover:bg-white hover:shadow-md transition-all"
+              >
+                <div class="flex items-center justify-between">
+                  <div class="flex items-center gap-4">
+                    <div
+                      class="w-10 h-10 rounded-full bg-white flex items-center justify-center text-sm font-medium text-gray-700 shadow-sm"
+                    >
+                      正
+                    </div>
+                    <div class="flex flex-col">
+                      <span class="font-bold text-gray-700">正计时</span>
+                      <span class="text-[10px] text-gray-400 font-mono">ID: {{ w.id }}</span>
+                    </div>
+                  </div>
+                  <div class="flex items-center gap-6">
+                    <button
+                      @click="removeWidget(w.id)"
+                      class="text-gray-400 hover:text-gray-900 text-xs underline px-2"
+                      title="删除此组件"
+                    >
+                      删除
+                    </button>
+                    <div class="flex flex-col items-end gap-1">
+                      <span class="text-[10px] text-gray-400 font-medium">公开</span
+                      ><label class="relative inline-flex items-center cursor-pointer"
+                        ><input
+                          type="checkbox"
+                          v-model="w.isPublic"
+                          class="sr-only peer"
+                          @change="store.saveData()" />
+                        <div
+                          class="w-9 h-5 bg-gray-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-blue-500"
+                        ></div
+                      ></label>
+                    </div>
+                    <div class="flex flex-col items-end gap-1">
+                      <span class="text-[10px] text-gray-400 font-medium">手机</span
+                      ><label class="relative inline-flex items-center cursor-pointer"
+                        ><input
+                          type="checkbox"
+                          :checked="!w.hideOnMobile"
+                          class="sr-only peer"
+                          @change="
+                            (e) => {
+                              w.hideOnMobile = !(e.target as HTMLInputElement).checked;
+                              store.saveData();
+                            }
+                          " />
+                        <div
+                          class="w-9 h-5 bg-gray-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-orange-500"
+                        ></div
+                      ></label>
+                    </div>
+                    <div class="flex flex-col items-end gap-1">
+                      <span class="text-[10px] text-gray-400 font-medium">启用</span
+                      ><label class="relative inline-flex items-center cursor-pointer"
+                        ><input
+                          type="checkbox"
+                          v-model="w.enable"
+                          class="sr-only peer"
+                          @change="store.saveData()" />
+                        <div
+                          class="w-9 h-5 bg-gray-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-green-500"
+                        ></div
+                      ></label>
+                    </div>
+                  </div>
+                </div>
+                <div class="w-full bg-white/60 p-3 rounded-lg border border-gray-100 space-y-3">
+                  <div>
+                    <label class="block text-xs font-bold text-gray-600 mb-1">标题</label>
+                    <input
+                      v-model="w.data.title"
+                      type="text"
+                      placeholder="例如：工作时长"
+                      class="w-full px-3 py-2 border border-gray-200 rounded-lg text-xs focus:border-gray-900 outline-none"
+                    />
+                  </div>
+                  <div>
+                    <label class="block text-xs font-bold text-gray-600 mb-1">开始时间</label>
+                    <input
+                      v-model="w.data.startTime"
+                      type="datetime-local"
+                      step="1"
                       class="w-full px-3 py-2 border border-gray-200 rounded-lg text-xs focus:border-gray-900 outline-none"
                     />
                   </div>

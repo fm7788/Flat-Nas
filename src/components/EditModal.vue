@@ -708,6 +708,7 @@ watch(
       }
     }
   },
+  { immediate: true },
 );
 
 const addBackupUrl = () => {

@@ -527,23 +527,53 @@
           "collapsed": false,
           "children": [
             {
-              "id": "1768571686946",
-              "title": "FlatNas",
-              "url": "http://localhost:5173/",
-              "icon": "http://localhost:5173/favicon.ico"
+              "id": "1769985031609",
+              "title": "https://github.com/Garry-QD/FlatNas",
+              "url": "https://github.com/Garry-QD/FlatNas",
+              "icon": "https://www.favicon.vip/get.php?url=https%3A%2F%2Fgithub.com%2FGarry-QD%2FFlatNas"
+            },
+            {
+              "id": "1769985070571",
+              "title": "FlatNas - 项目功能介绍",
+              "url": "https://flatnas.top/",
+              "icon": "https://flatnas.top/favicon.ico"
+            },
+            {
+              "id": "1769985137263",
+              "title": "FlatNas图标管理器",
+              "url": "https://nasicon.top/",
+              "icon": "https://www.favicon.vip/get.php?url=https%3A%2F%2Fnasicon.top%2F"
             }
           ]
         },
         {
           "id": "1768560156060",
-          "title": "2",
+          "title": "友情链接",
           "collapsed": false,
           "children": [
             {
-              "id": "1768574853428",
-              "title": "淘宝",
-              "url": "https://www.taobao.com/",
-              "icon": "https://www.favicon.vip/get.php?url=https%3A%2F%2Fwww.taobao.com%2F"
+              "id": "1769985199937",
+              "title": "道理鱼音乐 · 部署与常见问题",
+              "url": "https://dlyu.cn/help.html",
+              "icon": "https://www.favicon.vip/get.php?url=https%3A%2F%2Fdlyu.cn%2Fhelp.html"
+            },
+            {
+              "id": "1769985239445",
+              "title": "【飞鲸影视客户端】Fly Narwhal 重磅更新：支持智能跳过片头/片尾，追剧体验拉满！ - 攻略分享 飞牛私有云论坛 fnOS",
+              "url": "https://club.fnnas.com/forum.php?mod=viewthread&tid=49998",
+              "icon": "https://www.favicon.vip/get.php?url=https%3A%2F%2Fclub.fnnas.com%2Fforum.php%3Fmod%3Dviewthread%26tid%3D49998"
+            },
+            {
+              "id": "1769985360185",
+              "title": "重磅！飞牛图标管理工具发布！桌面图标你说了算+Docker部署使用教程 - 攻略分享 飞牛私有云论坛 fnOS",
+              "url": "https://club.fnnas.com/forum.php?mod=viewthread&tid=40265",
+              "icon": "https://www.favicon.vip/get.php?url=https%3A%2F%2Fclub.fnnas.com%2Fforum.php%3Fmod%3Dviewthread%26tid%3D40265"
+            },
+            {
+              "id": "1769985741891",
+              "title": "哔哩哔哩 (゜-゜)つロ 干杯~-bilibili",
+              "url": "https://www.bilibili.com/?spm_id_from=333.337.0.0",
+              "icon": "https://www.favicon.vip/get.php?url=https%3A%2F%2Fwww.bilibili.com%2F%3Fspm_id_from%3D333.337.0.0"
             }
           ]
         }
@@ -622,7 +652,7 @@
       "id": "w4",
       "type": "memo",
       "enable": true,
-      "data": "容器管理增加了禁止升级选项\n升级了图标获取方式增加更多接口\n修复一些逻辑BUG\n增加按页分组-设置-外观布局-布局与排版\n浏览器插件修复小尺寸文件传输助手无法正常发送文字内容的BUG",
+      "data": "调整了万能窗口开关位置\n二次复原预设组问题\n添加强制延迟判定\n增加延迟判定逻辑性\n按组分页增加 禁止翻页\n修复按组分页-侧边栏导航模式无法使用的问题\n分组区和组件区空隙减少4PX\n多开组件增加正计时",
       "colSpan": 1,
       "rowSpan": 2,
       "isPublic": false,
@@ -918,14 +948,13 @@
       "img3.wallspic.com-sheng_dan_jie-sheng_dan_cai_deng-sheng_dan_shu-jia_ri-sheng_dan_jie_de_zhuang_shi_pin-3178x4768.jpg"
     ],
     "sidebarViewMode": "bookmarks",
+    "webGroupPagination": false,
+    "webGroupPaginationDisableFlip": true,
     "empireMode": false,
     "customCss": "",
     "customJs": "",
     "customJsDisclaimerAgreed": true,
     "mouseHoverEffect": "scale",
-    "customCssList": [],
-    "customJsList": [],
-    "autoUltrawide": false,
     "weatherSource": "wttr",
     "qweatherProjectId": "",
     "qweatherKeyId": "",
@@ -939,6 +968,9 @@
       "unnamed-(2)_01.gif",
       "unnamed-2_02-1765141374406.gif"
     ],
+    "customCssList": [],
+    "customJsList": [],
+    "autoUltrawide": false,
     "backupUrls": {
       "腾讯视频": {
         "url_0": "https://www.baidu.com/"
@@ -975,7 +1007,6 @@
     },
     "hideHeaderOnMobile": true,
     "customData": {},
-    "forceNetworkMode": "auto",
-    "webGroupPagination": false
+    "forceNetworkMode": "auto"
   }
 }

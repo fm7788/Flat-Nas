@@ -7,6 +7,7 @@ import MemoWidget from "./MemoWidget.vue";
 import TodoWidget from "./TodoWidget.vue";
 import CalculatorWidget from "./CalculatorWidget.vue";
 import CountdownWidget from "./CountdownWidget.vue";
+import CountUpWidget from "./CountUpWidget.vue";
 import IframeWidget from "./IframeWidget.vue";
 import BookmarkWidget from "./BookmarkWidget.vue";
 import HotWidget from "./HotWidget.vue";
@@ -38,6 +39,7 @@ defineProps<{
     IP Widget
   </div>
   <CountdownWidget v-else-if="widget.type === 'countdown'" :widget="widget" />
+  <CountUpWidget v-else-if="widget.type === 'countup'" :widget="widget" />
   <IframeWidget
     v-else-if="widget.type === 'iframe'"
     :widget="widget"

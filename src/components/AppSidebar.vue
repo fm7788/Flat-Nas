@@ -63,6 +63,10 @@ const toggleViewMode = () => {
 };
 
 const scrollToGroup = (groupId: string) => {
+  if (store.appConfig.webGroupPagination && !isMobile.value) {
+    store.webPaginationActiveGroupId = groupId;
+    return;
+  }
   const el = document.getElementById("group-" + groupId);
   if (el) {
     el.scrollIntoView({ behavior: "smooth", block: "start" });
@@ -464,8 +468,8 @@ const openAddModal = () => {
   if (!store.isLogged) return;
   newBookmarkUrl.value = "";
   // 默认选中当前激活的分组
-  if (activeCategory.value) {
-    selectedCategoryForAdd.value = activeCategory.value.id;
+  if (currentFolder.value) {
+    selectedCategoryForAdd.value = currentFolder.value.id;
   } else {
     selectedCategoryForAdd.value = "";
   }
@@ -681,7 +685,7 @@ const confirmAddBookmark = async () => {
       categories.unshift(targetCategory);
     }
   } else {
-    targetCategory = categories.find((c) => c.id === selectedCategoryForAdd.value);
+    targetCategory = findCategoryById(categories, selectedCategoryForAdd.value) || undefined;
   }
 
   if (!targetCategory) {
@@ -720,8 +724,16 @@ const confirmAddBookmark = async () => {
   });
 
   store.saveData();
-  // Force update UI
-  activeCategory.value = { ...targetCategory };
+  if (activePath.value.length > 0) {
+    const pathIds = activePath.value.map((c) => c.id);
+    const newPath = pathIds
+      .map((id) => findCategoryById(categories, id))
+      .filter((x): x is BookmarkCategory => Boolean(x));
+    activePath.value = newPath;
+    activeCategory.value = newPath[0] || null;
+  } else if (activeCategory.value) {
+    activeCategory.value = findCategoryById(categories, activeCategory.value.id);
+  }
 };
 
 const togglePin = (item: BookmarkItem, parent: BookmarkCategory) => {
@@ -1550,8 +1562,13 @@ const toggle = () => {
                   "
                 >
                   <option value="">默认 (未分组)</option>
-                  <option v-for="cat in bookmarks" :key="cat.id" :value="cat.id" class="text-black">
-                    {{ cat.title }}
+                  <option
+                    v-for="cat in allBookmarkCategories"
+                    :key="cat.id"
+                    :value="cat.id"
+                    class="text-black"
+                  >
+                    {{ cat.label }}
                   </option>
                 </select>
               </div>

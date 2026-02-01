@@ -64,9 +64,11 @@ export const useMainStore = defineStore("main", () => {
   });
 
   const fetchLuckyStunData = async () => {
+    if (import.meta.env.MODE === "test") return;
     // Lazy load stun data only when needed or after app is idle
     try {
-      const res = await fetch("/api/lucky/stun");
+      const base = typeof window !== "undefined" ? window.location.origin : "http://localhost";
+      const res = await fetch(new URL("/api/lucky/stun", base).toString());
       if (res.ok) {
         luckyStunData.value = await res.json();
       }
@@ -76,8 +78,10 @@ export const useMainStore = defineStore("main", () => {
   };
 
   const fetchSystemConfig = async () => {
+    if (import.meta.env.MODE === "test") return;
     try {
-      const res = await fetch("/api/system-config");
+      const base = typeof window !== "undefined" ? window.location.origin : "http://localhost";
+      const res = await fetch(new URL("/api/system-config", base).toString());
       if (res.ok) {
         systemConfig.value = await res.json();
       }
@@ -90,7 +94,8 @@ export const useMainStore = defineStore("main", () => {
     try {
       const headers: Record<string, string> = { "Content-Type": "application/json" };
       if (token.value) headers["Authorization"] = `Bearer ${token.value}`;
-      const res = await fetch("/api/system-config", {
+      const base = typeof window !== "undefined" ? window.location.origin : "http://localhost";
+      const res = await fetch(new URL("/api/system-config", base).toString(), {
         method: "POST",
         headers,
         body: JSON.stringify(newConfig),
@@ -119,6 +124,7 @@ export const useMainStore = defineStore("main", () => {
   const password = ref(""); // Only used for password change, not auth
   const isExpandedMode = ref(false);
   const activeMusicPlayer = ref<"mini-player" | "music-widget" | null>(null);
+  const webPaginationActiveGroupId = ref("");
 
   const getHeaders = () => {
     const headers: Record<string, string> = { "Content-Type": "application/json" };
@@ -129,7 +135,7 @@ export const useMainStore = defineStore("main", () => {
   };
 
   // Version Check
-  const currentVersion = "1.0.74dev4";
+  const currentVersion = "1.0.74dev5";
   const latestVersion = ref("");
   const dockerUpdateAvailable = ref(false);
   const updateCheckLastAt = useStorage<number>("flat-nas-update-check-last-at", 0);
@@ -262,6 +268,7 @@ export const useMainStore = defineStore("main", () => {
     mobileWallpaperOrder: [],
     sidebarViewMode: "bookmarks",
     webGroupPagination: false,
+    webGroupPaginationDisableFlip: false,
     empireMode: false,
     customCss: "",
     customJs: "",
@@ -315,100 +322,9 @@ export const useMainStore = defineStore("main", () => {
     }
   };
 
-  const makeDefaultCommonGroup = (): NavGroup => {
-    const now = Date.now();
-    const items: NavItem[] = [
-      {
-        id: `common-${now}-1`,
-        title: "GitHub",
-        url: "https://github.com/",
-        lanUrl: "https://github.com/",
-        icon: "",
-        isPublic: true,
-      },
-      {
-        id: `common-${now}-2`,
-        title: "Bilibili",
-        url: "https://www.bilibili.com/",
-        lanUrl: "https://www.bilibili.com/",
-        icon: "",
-        isPublic: true,
-      },
-      {
-        id: `common-${now}-3`,
-        title: "掘金",
-        url: "https://juejin.cn/",
-        lanUrl: "https://juejin.cn/",
-        icon: "",
-        isPublic: true,
-      },
-      {
-        id: `common-${now}-4`,
-        title: "V2EX",
-        url: "https://www.v2ex.com/",
-        lanUrl: "https://www.v2ex.com/",
-        icon: "",
-        isPublic: true,
-      },
-      {
-        id: `common-${now}-5`,
-        title: "知乎",
-        url: "https://www.zhihu.com/",
-        lanUrl: "https://www.zhihu.com/",
-        icon: "",
-        isPublic: true,
-      },
-      {
-        id: `common-${now}-6`,
-        title: "微博",
-        url: "https://weibo.com/",
-        lanUrl: "https://weibo.com/",
-        icon: "",
-        isPublic: true,
-      },
-      {
-        id: `common-${now}-7`,
-        title: "IT之家",
-        url: "https://www.ithome.com/",
-        lanUrl: "https://www.ithome.com/",
-        icon: "",
-        isPublic: true,
-      },
-      {
-        id: `common-${now}-8`,
-        title: "腾讯视频",
-        url: "https://v.qq.com/",
-        lanUrl: "https://v.qq.com/",
-        icon: "",
-        isPublic: true,
-      },
-      {
-        id: `common-${now}-9`,
-        title: "YouTube",
-        url: "https://www.youtube.com/",
-        lanUrl: "https://www.youtube.com/",
-        icon: "",
-        isPublic: true,
-      },
-      {
-        id: `common-${now}-10`,
-        title: "Google",
-        url: "https://www.google.com/",
-        lanUrl: "https://www.google.com/",
-        icon: "",
-        isPublic: true,
-      },
-    ];
-
-    return {
-      id: "common-group",
-      title: "常用",
-      preset: true,
-      items,
-    };
-  };
-
   const ensureDefaultCommonGroup = () => {
+    // 逻辑已移除：允许用户删除所有分组，不再强制恢复默认分组
+    /*
     const common = groups.value.find((g) => g.id === "common-group" || g.title === "常用");
     if (!common) {
       if (groups.value.length === 0) {
@@ -422,6 +338,7 @@ export const useMainStore = defineStore("main", () => {
       common.items = makeDefaultCommonGroup().items;
     }
     if (common.preset !== true) common.preset = true;
+    */
   };
 
   const handleDataUpdate = (data: BackupData) => {
@@ -1142,6 +1059,7 @@ export const useMainStore = defineStore("main", () => {
     getHeaders,
     isExpandedMode,
     activeMusicPlayer,
+    webPaginationActiveGroupId,
     rssFeeds,
     rssCategories,
     init,

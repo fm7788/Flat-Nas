@@ -37,6 +37,7 @@ const CalendarWidget = defineAsyncComponent(() => import("./CalendarWidget.vue")
 const ClockWidget = defineAsyncComponent(() => import("./ClockWidget.vue"));
 const AppSidebar = defineAsyncComponent(() => import("./AppSidebar.vue"));
 const CountdownWidget = defineAsyncComponent(() => import("./CountdownWidget.vue"));
+const CountUpWidget = defineAsyncComponent(() => import("./CountUpWidget.vue"));
 const DockerWidget = defineAsyncComponent(() => import("./DockerWidget.vue"));
 const SystemStatusWidget = defineAsyncComponent(() => import("./SystemStatusWidget.vue"));
 const CustomCssWidget = defineAsyncComponent(() => import("./CustomCssWidget.vue"));
@@ -61,7 +62,12 @@ const isEditMode = ref(false);
 const activeResizeWidgetId = ref<string | null>(null);
 const currentEditItem = ref<NavItem | null>(null);
 const currentGroupId = ref<string>("");
-const activePaginationGroupId = ref<string>("");
+const activePaginationGroupId = computed<string>({
+  get: () => store.webPaginationActiveGroupId || "",
+  set: (val) => {
+    store.webPaginationActiveGroupId = val;
+  },
+});
 const isWebPaginationMode = computed(() => store.appConfig.webGroupPagination && !isMobile.value);
 const mainContainerRef = ref<HTMLElement | null>(null);
 
@@ -101,7 +107,11 @@ const forceMode = computed({
 const effectiveIsLan = computed(() => {
   if (forceMode.value === "lan") return true;
   if (forceMode.value === "wan") return false;
-  if (forceMode.value === "latency") return latency.value > 0 && latency.value < 200;
+  if (forceMode.value === "latency") {
+    if (isLanMode.value) return true;
+    if (latency.value > 0) return latency.value < 200;
+    return false;
+  }
   return isLanMode.value;
 });
 
@@ -588,6 +598,7 @@ const handleWebPaginationWheel = (e: WheelEvent) => {
   e.stopPropagation();
 
   paginationWheelLockUntil.value = now + 320;
+  if (store.appConfig.webGroupPaginationDisableFlip) return;
   movePaginationGroup(e.deltaY > 0 ? 1 : -1);
 };
 
@@ -859,10 +870,19 @@ const handleCardClick = (item: NavItem) => {
     // 强制外网模式：只使用外网链接
     targetUrl = item.url;
   } else if (forceMode.value === "latency") {
-    // 延迟判定模式
-    const isLatencyLan = latency.value > 0 && latency.value < 200;
-    if (store.isLogged && isLatencyLan && item.lanUrl) {
+    if (store.isLogged && isLanMode.value && item.lanUrl) {
       targetUrl = item.lanUrl;
+    } else {
+      const rtt = latency.value;
+      if (rtt > 0) {
+        if (store.isLogged && rtt < 200 && item.lanUrl) {
+          targetUrl = item.lanUrl;
+        }
+      } else {
+        if (store.isLogged && isLanMode.value && item.lanUrl) {
+          targetUrl = item.lanUrl;
+        }
+      }
     }
   } else {
     // 自动模式
@@ -2164,9 +2184,18 @@ onMounted(() => {
                   'bg-gray-100 text-gray-400 hover:bg-gray-200': forceMode === 'auto',
                   'bg-green-100 text-green-600 hover:bg-green-200': forceMode === 'lan',
                   'bg-blue-100 text-blue-600 hover:bg-blue-200': forceMode === 'wan',
+                  'bg-yellow-100 text-yellow-700 hover:bg-yellow-200': forceMode === 'latency',
                 }"
               >
-                {{ forceMode === "auto" ? "自动" : forceMode === "lan" ? "强制内网" : "强制外网" }}
+                {{
+                  forceMode === "auto"
+                    ? "自动"
+                    : forceMode === "lan"
+                      ? "强制内网"
+                      : forceMode === "wan"
+                        ? "强制外网"
+                        : "延迟判定"
+                }}
               </button>
               <div
                 class="flex items-center gap-2 px-3 h-full rounded-full text-[10px] font-medium cursor-pointer hover:bg-gray-100 transition-all select-none"
@@ -2329,7 +2358,7 @@ onMounted(() => {
           :margin="isMobile ? [12, 12] : [24, 24]"
           @layout-updated="handleLayoutUpdated"
           :class="[
-            'mb-8 text-white select-none transition-all duration-300',
+            'mb-4 text-white select-none transition-all duration-300',
             activeResizeWidgetId ? 'smooth-size' : '',
           ]"
         >
@@ -2456,6 +2485,7 @@ onMounted(() => {
               </div>
             </div>
             <CountdownWidget v-else-if="widget.type === 'countdown'" :widget="widget" />
+            <CountUpWidget v-else-if="widget.type === 'countup'" :widget="widget" />
             <IframeWidget
               v-else-if="widget.type === 'iframe'"
               :widget="widget"
@@ -3123,16 +3153,21 @@ onMounted(() => {
     </footer>
 
     <!-- Group Settings Overlay -->
-    <GroupSettingsModal v-model:show="showGroupSettingsModal" :groupId="activeGroupId" />
+    <GroupSettingsModal
+      v-if="showGroupSettingsModal"
+      v-model:show="showGroupSettingsModal"
+      :groupId="activeGroupId"
+    />
 
     <EditModal
+      v-if="showEditModal"
       v-model:show="showEditModal"
       :data="currentEditItem"
       :groupId="currentGroupId"
       @save="handleSave"
     />
-    <SettingsModal v-model:show="showSettingsModal" />
-    <LoginModal v-model:show="showLoginModal" />
+    <SettingsModal v-if="showSettingsModal" v-model:show="showSettingsModal" />
+    <LoginModal v-if="showLoginModal" v-model:show="showLoginModal" />
 
     <!-- Context Menu -->
     <div
