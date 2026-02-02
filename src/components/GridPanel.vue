@@ -103,13 +103,22 @@ const forceMode = computed({
     store.saveData();
   },
 });
+const DEFAULT_LATENCY_THRESHOLD_MS = 200;
+const latencyThresholdMs = computed(() => {
+  const raw = store.appConfig.latencyThresholdMs;
+  const n =
+    typeof raw === "number" && Number.isFinite(raw)
+      ? Math.trunc(raw)
+      : DEFAULT_LATENCY_THRESHOLD_MS;
+  return Math.min(30000, Math.max(20, n));
+});
 
 const effectiveIsLan = computed(() => {
   if (forceMode.value === "lan") return true;
   if (forceMode.value === "wan") return false;
   if (forceMode.value === "latency") {
     if (isLanMode.value) return true;
-    if (latency.value > 0) return latency.value < 200;
+    if (latency.value > 0) return latency.value < latencyThresholdMs.value;
     return false;
   }
   return isLanMode.value;
@@ -357,10 +366,35 @@ const checkVisible = (obj?: WidgetConfig | NavItem) => {
   return !!obj.isPublic;
 };
 const isTabletPortrait = computed(() => deviceKey.value === "tablet" && height.value > width.value);
+const desktopWidgetAreaCols = computed(() => {
+  const raw = store.appConfig.widgetAreaCols ?? store.appConfig.widgetAreaSize;
+  const n = typeof raw === "number" && Number.isFinite(raw) ? Math.trunc(raw) : 4;
+  const clamped = Math.min(16, Math.max(1, n));
+  if (store.isExpandedMode) return Math.min(16, Math.max(8, clamped));
+  return clamped;
+});
+const isWideLayout = computed(
+  () => deviceKey.value === "desktop" && desktopWidgetAreaCols.value > 4,
+);
+const mainContentMaxWidth = computed(() => {
+  if (deviceKey.value !== "desktop") return undefined;
+  const base = 1280;
+  const maxAllowed = Math.round(width.value * 0.89);
+  if (!Number.isFinite(maxAllowed) || maxAllowed <= 0) return `${base}px`;
+
+  if (desktopWidgetAreaCols.value <= 4) {
+    return `${Math.min(base, maxAllowed)}px`;
+  }
+
+  const baseColWidth = base / 4;
+  const required = Math.round(baseColWidth * desktopWidgetAreaCols.value);
+  const target = Math.min(required, maxAllowed);
+  return `${Math.max(0, target)}px`;
+});
 const widgetColNum = computed(() => {
   if (deviceKey.value === "mobile") return 1;
   if (deviceKey.value === "tablet") return isTabletPortrait.value ? 2 : 4;
-  return store.isExpandedMode ? 8 : 4;
+  return desktopWidgetAreaCols.value;
 });
 const rowHeight = computed(() =>
   deviceKey.value === "mobile" ? 120 : deviceKey.value === "tablet" ? 130 : 140,
@@ -778,6 +812,11 @@ watch(forceMode, (val) => {
     checkLatency();
   }
 });
+watch(latencyThresholdMs, () => {
+  if (forceMode.value === "latency") {
+    checkLatency();
+  }
+});
 
 onMounted(() => {
   isLanMode.value = isInternalNetwork(window.location.hostname);
@@ -875,7 +914,7 @@ const handleCardClick = (item: NavItem) => {
     } else {
       const rtt = latency.value;
       if (rtt > 0) {
-        if (store.isLogged && rtt < 200 && item.lanUrl) {
+        if (store.isLogged && rtt < latencyThresholdMs.value && item.lanUrl) {
           targetUrl = item.lanUrl;
         }
       } else {
@@ -2122,10 +2161,7 @@ onMounted(() => {
           isSidebarEnabled && !isMobile ? (sidebarCollapsed ? '100px' : '288px') : undefined,
       }"
     >
-      <div
-        class="mx-auto transition-all duration-300"
-        :class="store.isExpandedMode ? 'max-w-[95%]' : 'max-w-7xl'"
-      >
+      <div class="mx-auto transition-all duration-300" :style="{ maxWidth: mainContentMaxWidth }">
         <div
           class="flex flex-col xl:flex-row xl:justify-between items-center gap-6 relative flatnas-header-container"
           :class="isWebPaginationMode ? 'mb-4' : 'mb-10'"
@@ -2234,7 +2270,7 @@ onMounted(() => {
           <div
             v-if="checkVisible(store.widgets.find((w) => w.id === 'w5'))"
             class="w-full xl:absolute xl:left-1/2 xl:-translate-x-1/2 z-50 transition-all duration-300"
-            :class="store.isExpandedMode ? 'xl:w-[32rem]' : 'xl:w-64'"
+            :class="isWideLayout ? 'xl:w-[32rem]' : 'xl:w-64'"
           >
             <form
               class="mx-auto shadow-lg hover:shadow-xl transition-shadow rounded-full bg-white/90 backdrop-blur-md border border-white/40 flex items-center p-1 flatnas-search-form"

@@ -16,6 +16,78 @@ const props = defineProps<{ show: boolean }>();
 const emit = defineEmits(["update:show"]);
 const store = useMainStore();
 
+const DEFAULT_LATENCY_THRESHOLD_MS = 200;
+const latencyThresholdDraft = ref("");
+const latencyThresholdTouched = ref(false);
+const latencyThresholdAppliedToast = ref("");
+let latencyThresholdToastTimer: number | null = null;
+const latencyThresholdValidation = computed(() => {
+  const raw = latencyThresholdDraft.value.trim();
+  if (!raw) return { ok: false, value: null as number | null, error: "请输入阈值（20–30000）" };
+  if (!/^\d+$/.test(raw)) return { ok: false, value: null as number | null, error: "仅支持正整数" };
+  const n = Number.parseInt(raw, 10);
+  if (!Number.isFinite(n)) return { ok: false, value: null as number | null, error: "数值无效" };
+  if (n < 20 || n > 30000) return { ok: false, value: n, error: "范围需在 20–30000 ms" };
+  return { ok: true, value: n, error: "" };
+});
+const syncLatencyThresholdDraft = () => {
+  const v = store.appConfig.latencyThresholdMs ?? DEFAULT_LATENCY_THRESHOLD_MS;
+  latencyThresholdDraft.value = String(v);
+  latencyThresholdTouched.value = false;
+};
+watch(
+  () => store.appConfig.forceNetworkMode,
+  (mode) => {
+    if (mode === "latency") syncLatencyThresholdDraft();
+  },
+  { immediate: true },
+);
+watch(
+  () => store.appConfig.latencyThresholdMs,
+  () => {
+    if (!latencyThresholdTouched.value) syncLatencyThresholdDraft();
+  },
+);
+const onLatencyThresholdInput = (e: Event) => {
+  latencyThresholdTouched.value = true;
+  const raw = (e.target as HTMLInputElement).value ?? "";
+  const digits = raw.replace(/[^\d]/g, "");
+  latencyThresholdDraft.value = digits;
+};
+const applyLatencyThreshold = async () => {
+  const v = latencyThresholdValidation.value;
+  if (!v.ok || typeof v.value !== "number") return;
+  store.appConfig.latencyThresholdMs = v.value;
+  latencyThresholdTouched.value = false;
+  await store.saveData(true);
+  latencyThresholdAppliedToast.value = `已生效：${v.value} ms`;
+  if (latencyThresholdToastTimer) window.clearTimeout(latencyThresholdToastTimer);
+  latencyThresholdToastTimer = window.setTimeout(() => {
+    latencyThresholdAppliedToast.value = "";
+    latencyThresholdToastTimer = null;
+  }, 1200);
+};
+const onLatencyThresholdBlur = async () => {
+  if (!latencyThresholdTouched.value) return;
+  const v = latencyThresholdValidation.value;
+  if (!v.ok || typeof v.value !== "number") {
+    syncLatencyThresholdDraft();
+    return;
+  }
+  await applyLatencyThreshold();
+};
+const resetLatencyThreshold = async () => {
+  store.appConfig.latencyThresholdMs = DEFAULT_LATENCY_THRESHOLD_MS;
+  syncLatencyThresholdDraft();
+  await store.saveData(true);
+  latencyThresholdAppliedToast.value = `已重置：${DEFAULT_LATENCY_THRESHOLD_MS} ms`;
+  if (latencyThresholdToastTimer) window.clearTimeout(latencyThresholdToastTimer);
+  latencyThresholdToastTimer = window.setTimeout(() => {
+    latencyThresholdAppliedToast.value = "";
+    latencyThresholdToastTimer = null;
+  }, 1200);
+};
+
 const showWallpaperLibrary = ref(false);
 const musicVolume = useStorage<number>("flat-nas-music-volume", 0.7);
 const musicVolumePercent = computed({
@@ -1777,6 +1849,31 @@ watch(activeTab, (val) => {
                   </div>
                 </div>
                 <div>
+                  <h4 class="text-sm font-medium text-gray-700 mb-1">组件区整区尺寸</h4>
+                  <div class="flex items-center gap-2">
+                    <input
+                      type="number"
+                      v-model.number="store.appConfig.widgetAreaCols"
+                      min="1"
+                      max="16"
+                      class="w-20 px-2 py-2 border border-gray-200 rounded-xl focus:border-gray-900 outline-none text-sm bg-white"
+                    />
+                    <span class="text-xs text-gray-400 select-none">×</span>
+                    <input
+                      type="number"
+                      v-model.number="store.appConfig.widgetAreaRows"
+                      min="1"
+                      max="16"
+                      class="w-20 px-2 py-2 border border-gray-200 rounded-xl focus:border-gray-900 outline-none text-sm bg-white"
+                    />
+                    <span class="ml-auto text-xs text-gray-500 w-14 text-right"
+                      >{{ store.appConfig.widgetAreaCols ?? 4 }}×{{
+                        store.appConfig.widgetAreaRows ?? 4
+                      }}</span
+                    >
+                  </div>
+                </div>
+                <div>
                   <h4 class="text-sm font-medium text-gray-700 mb-1">黑暗模式</h4>
                   <div class="flex items-center gap-2">
                     <label class="relative inline-flex items-center cursor-pointer">
@@ -3090,7 +3187,7 @@ watch(activeTab, (val) => {
 
           <div v-if="activeTab === 'network'" class="p-4 space-y-4">
             <h4 class="text-base font-bold text-gray-900 border-l-4 border-gray-900 pl-3 mb-4">
-              网络环境判定设置
+              网络环境判定设置（白名单）
             </h4>
 
             <div class="bg-gray-50 border border-gray-100 rounded-xl p-4">
@@ -3172,6 +3269,62 @@ watch(activeTab, (val) => {
 
                   <span class="text-sm text-gray-700">强制外网</span>
                 </label>
+              </div>
+              <div v-if="store.appConfig.forceNetworkMode === 'latency'" class="mt-3 space-y-1.5">
+                <div class="flex flex-col sm:flex-row sm:items-center gap-2">
+                  <div class="text-xs text-gray-600 sm:w-28 shrink-0">延迟阈值 (ms)</div>
+                  <div class="flex items-center gap-2 flex-1">
+                    <input
+                      :value="latencyThresholdDraft"
+                      inputmode="numeric"
+                      @input="onLatencyThresholdInput"
+                      @blur="onLatencyThresholdBlur"
+                      @keydown.enter.prevent="applyLatencyThreshold"
+                      placeholder="20–30000"
+                      class="w-32 px-3 py-2 border rounded-lg text-xs outline-none font-mono focus:border-gray-900"
+                      :class="
+                        latencyThresholdTouched && !latencyThresholdValidation.ok
+                          ? 'border-red-300'
+                          : 'border-gray-200'
+                      "
+                    />
+                    <button
+                      type="button"
+                      @click="applyLatencyThreshold"
+                      :disabled="!latencyThresholdValidation.ok"
+                      class="px-3 py-2 rounded-lg text-xs font-bold transition-colors whitespace-nowrap"
+                      :class="
+                        latencyThresholdValidation.ok
+                          ? 'bg-yellow-500 text-white hover:bg-yellow-600'
+                          : 'bg-gray-200 text-gray-500 cursor-not-allowed'
+                      "
+                    >
+                      确认
+                    </button>
+                    <button
+                      type="button"
+                      @click="resetLatencyThreshold"
+                      class="px-3 py-2 bg-white text-gray-600 border border-gray-200 rounded-lg text-xs font-bold hover:bg-gray-50 transition-colors whitespace-nowrap"
+                    >
+                      重置
+                    </button>
+                    <div class="text-[10px] text-gray-400 flex-1">
+                      默认 {{ DEFAULT_LATENCY_THRESHOLD_MS }} ms
+                    </div>
+                  </div>
+                </div>
+                <p
+                  v-if="latencyThresholdTouched && !latencyThresholdValidation.ok"
+                  class="text-[11px] text-red-600"
+                >
+                  {{ latencyThresholdValidation.error }}
+                </p>
+                <p v-else-if="latencyThresholdAppliedToast" class="text-[11px] text-green-600">
+                  {{ latencyThresholdAppliedToast }}
+                </p>
+                <p v-else class="text-[11px] text-gray-500">
+                  启用白名单后优先按真实 IP 判定，其次才是延迟阈值判定；失焦或点击确认后立即生效。
+                </p>
               </div>
             </div>
           </div>
@@ -3977,134 +4130,160 @@ document.querySelector('.card-item').addEventListener('click', () => {
               </button>
             </div>
           </div>
-          <div
-            v-if="activeTab === 'about'"
-            class="min-h-full flex flex-row items-start justify-between p-8 gap-8 -mt-4"
-          >
-            <div class="flex-[0.618] text-left space-y-4 self-center">
-              <h4 class="text-2xl font-bold text-gray-900 mb-1">关于 FlatNas</h4>
-              <div class="flex items-center justify-start gap-2">
-                <span class="text-2xl text-gray-400 font-mono">v{{ store.currentVersion }}</span>
-                <span
-                  v-if="store.hasUpdate && store.isLogged"
-                  class="w-2 h-2 bg-gray-900 rounded-full cursor-pointer"
-                  title="发现新版本"
-                  @click="store.checkUpdate(true)"
-                ></span>
-              </div>
-              <div class="text-xs text-gray-500">QQ群:613835409</div>
-              <div class="text-xs text-gray-500">
-                官网与介绍：
-                <a
-                  href="https://flatnas.top/"
-                  target="_blank"
-                  class="text-gray-600 underline hover:text-gray-900"
-                >
-                  https://flatnas.top/
-                </a>
-              </div>
-              <div class="text-xs text-gray-500">
-                飞牛百科：
-                <a
-                  href="http://qdnas.icu/"
-                  target="_blank"
-                  class="text-gray-600 underline hover:text-gray-900"
-                >
-                  http://qdnas.icu/
-                </a>
-              </div>
-
-              <div class="text-xs text-gray-500">
-                图标库主站：
-                <a
-                  href="https://nasicon.top/"
-                  target="_blank"
-                  class="text-gray-600 underline hover:text-gray-900"
-                >
-                  https://nasicon.top/
-                </a>
-              </div>
-              <div class="text-xs text-gray-500">
-                图标库二站：
-                <a
-                  href="https://2.nasicon.top/"
-                  target="_blank"
-                  class="text-gray-600 underline hover:text-gray-900"
-                >
-                  https://2.nasicon.top/
-                </a>
-              </div>
-              <div class="text-xs text-gray-500">
-                图标库三站：
-                <a
-                  href="https://4.nasicon.top/"
-                  target="_blank"
-                  class="text-gray-600 underline hover:text-gray-900"
-                >
-                  https://4.nasicon.top/
-                </a>
-              </div>
-              <div class="flex items-center justify-start gap-6">
-                <a
-                  href="https://github.com/Garry-QD/FlatNas"
-                  target="_blank"
-                  class="hover:opacity-80 transition-opacity"
-                  title="GitHub"
-                >
-                  <img src="/icons/github.svg" alt="GitHub" class="w-6 h-6 transition-all" />
-                </a>
-                <a
-                  href="https://gitee.com/gjx0808/FlatNas"
-                  target="_blank"
-                  class="text-gray-700 hover:text-gray-900 hover:opacity-80 transition-opacity"
-                  title="Gitee"
-                >
-                  <svg
-                    xmlns="http://www.w3.org/2000/svg"
-                    viewBox="0 0 24 24"
-                    fill="currentColor"
-                    class="w-6 h-6"
-                  >
-                    <path
-                      fill-rule="evenodd"
-                      clip-rule="evenodd"
-                      d="M11.984 0A12 12 0 0 0 0 12a12 12 0 0 0 12 12 12 12 0 0 0 12-12A12 12 0 0 0 12 0zm5.811 17.914l-.943-.896c-.342-.325-.92-.332-1.19-.026l-2.72 3.067a.772.772 0 0 1-1.05.09l-6.55-5.314a.775.775 0 0 1 .1-1.267l6.894-4.003a.775.775 0 0 1  1.03.22l2.214 3.285a.775.775 0 0 0 1.19.12l1.024-.967a.775.775 0 0 0 .08-1.02l-3.65-5.504a.775.775 0 0 0-1.17-.14l-8.78 7.32a.775.775 0 0 0-.15 1.08l7.87 6.38a.775.775 0 0 0 1.05-.09l3.58-4.034a.775.775 0 0 0 .02-1.08z"
-                    />
-                  </svg>
-                </a>
-                <a
-                  href="https://hub.docker.com/r/qdnas/flatnas"
-                  target="_blank"
-                  class="hover:opacity-80 transition-opacity"
-                  title="Docker"
-                >
-                  <img
-                    src="/icons/Docker+Docker+docker.com.png"
-                    alt="Docker"
-                    class="w-6 h-6 object-contain scale-110 transition-all"
-                  />
-                </a>
+          <div v-if="activeTab === 'about'" class="min-h-full flex flex-col p-8 -mt-4">
+            <div class="bg-white/60 border border-gray-100 rounded-xl p-4">
+              <h5 class="text-sm font-bold text-gray-900 mb-2">感谢</h5>
+              <div class="text-xs text-gray-600 leading-relaxed">
+                <div class="text-sm">
+                  <span class="font-medium text-gray-800">投喂人：</span>
+                  小浣熊；*俊；*牛社区主理人；*a；*甜蜜主理人；*坤；*O；*陈等
+                </div>
+                <div class="mt-2">
+                  <span class="font-medium text-gray-800">特别鸣谢意见反馈：</span>
+                  Excel;徐大大;时也,命也;大星;友人A;汪仔饭;Assassin;多度;Wheezer等
+                </div>
               </div>
             </div>
-
-            <div class="flex-[0.382] flex flex-col items-center gap-4">
-              <div class="text-sm font-medium text-gray-700">☕ 投喂作者</div>
-              <div class="flex flex-col gap-4">
+            <div
+              class="mt-4 bg-white/60 border border-gray-100 rounded-xl p-4 flex flex-row items-center justify-center gap-6"
+            >
+              <div
+                class="text-lg font-bold text-gray-700"
+                style="writing-mode: vertical-rl; text-orientation: mixed"
+              >
+                ☕ 投喂作者
+              </div>
+              <div class="flex flex-row flex-wrap items-start justify-center gap-6">
                 <div class="flex flex-col items-center gap-2">
                   <img
                     src="/alipay.jpg"
-                    class="w-40 h-40 rounded-lg shadow-sm border border-gray-100 object-contain transition-all"
+                    class="w-36 h-36 rounded-lg shadow-sm border border-gray-100 object-contain transition-all"
                     alt="支付宝"
                   />
-                  <span class="text-[15px] text-gray-500">支付宝</span>
+                  <span class="text-sm text-gray-500">支付宝</span>
                 </div>
                 <div class="flex flex-col items-center gap-2">
                   <img
                     src="/wechat.jpg"
-                    class="w-40 h-40 rounded-lg shadow-sm border border-gray-100 object-contain transition-all"
+                    class="w-36 h-36 rounded-lg shadow-sm border border-gray-100 object-contain transition-all"
                     alt="微信"
                   />
-                  <span class="text-[15px] text-gray-500">微信</span>
+                  <span class="text-sm text-gray-500">微信</span>
+                </div>
+              </div>
+            </div>
+
+            <div class="mt-auto pt-4">
+              <div class="bg-white/60 border border-gray-100 rounded-xl p-4">
+                <div class="flex items-center justify-between gap-4">
+                  <div class="flex items-baseline gap-2">
+                    <span class="text-xs text-gray-500">QQ群</span>
+                    <span class="text-lg text-gray-700 font-mono">613835409</span>
+                  </div>
+                  <div class="flex items-center gap-2">
+                    <span class="text-lg text-gray-400 font-mono">v{{ store.currentVersion }}</span>
+                    <span
+                      v-if="store.hasUpdate && store.isLogged"
+                      class="w-2 h-2 bg-gray-900 rounded-full cursor-pointer"
+                      title="发现新版本"
+                      @click="store.checkUpdate(true)"
+                    ></span>
+                  </div>
+                </div>
+
+                <div class="mt-3 grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-2">
+                  <div class="text-xs text-gray-500">
+                    官网与介绍：
+                    <a
+                      href="https://flatnas.top/"
+                      target="_blank"
+                      class="text-gray-600 underline hover:text-gray-900"
+                    >
+                      https://flatnas.top/
+                    </a>
+                  </div>
+                  <div class="text-xs text-gray-500">
+                    飞牛百科：
+                    <a
+                      href="http://qdnas.icu/"
+                      target="_blank"
+                      class="text-gray-600 underline hover:text-gray-900"
+                    >
+                      http://qdnas.icu/
+                    </a>
+                  </div>
+                  <div class="text-xs text-gray-500">
+                    图标库主站：
+                    <a
+                      href="https://nasicon.top/"
+                      target="_blank"
+                      class="text-gray-600 underline hover:text-gray-900"
+                    >
+                      https://nasicon.top/
+                    </a>
+                  </div>
+                  <div class="text-xs text-gray-500">
+                    图标库二站：
+                    <a
+                      href="https://2.nasicon.top/"
+                      target="_blank"
+                      class="text-gray-600 underline hover:text-gray-900"
+                    >
+                      https://2.nasicon.top/
+                    </a>
+                  </div>
+                  <div class="text-xs text-gray-500">
+                    图标库三站：
+                    <a
+                      href="https://4.nasicon.top/"
+                      target="_blank"
+                      class="text-gray-600 underline hover:text-gray-900"
+                    >
+                      https://4.nasicon.top/
+                    </a>
+                  </div>
+                </div>
+
+                <div class="mt-4 flex items-center justify-end gap-6">
+                  <a
+                    href="https://github.com/Garry-QD/FlatNas"
+                    target="_blank"
+                    class="hover:opacity-80 transition-opacity"
+                    title="GitHub"
+                  >
+                    <img src="/icons/github.svg" alt="GitHub" class="w-6 h-6 transition-all" />
+                  </a>
+                  <a
+                    href="https://gitee.com/gjx0808/FlatNas"
+                    target="_blank"
+                    class="text-gray-700 hover:text-gray-900 hover:opacity-80 transition-opacity"
+                    title="Gitee"
+                  >
+                    <svg
+                      xmlns="http://www.w3.org/2000/svg"
+                      viewBox="0 0 24 24"
+                      fill="currentColor"
+                      class="w-6 h-6"
+                    >
+                      <path
+                        fill-rule="evenodd"
+                        clip-rule="evenodd"
+                        d="M11.984 0A12 12 0 0 0 0 12a12 12 0 0 0 12 12 12 12 0 0 0 12-12A12 12 0 0 0 12 0zm5.811 17.914l-.943-.896c-.342-.325-.92-.332-1.19-.026l-2.72 3.067a.772.772 0 0 1-1.05.09l-6.55-5.314a.775.775 0 0 1 .1-1.267l6.894-4.003a.775.775 0 0 1  1.03.22l2.214 3.285a.775.775 0 0 0 1.19.12l1.024-.967a.775.775 0 0 0 .08-1.02l-3.65-5.504a.775.775 0 0 0-1.17-.14l-8.78 7.32a.775.775 0 0 0-.15 1.08l7.87 6.38a.775.775 0 0 0 1.05-.09l3.58-4.034a.775.775 0 0 0 .02-1.08z"
+                      />
+                    </svg>
+                  </a>
+                  <a
+                    href="https://hub.docker.com/r/qdnas/flatnas"
+                    target="_blank"
+                    class="hover:opacity-80 transition-opacity"
+                    title="Docker"
+                  >
+                    <img
+                      src="/icons/Docker+Docker+docker.com.png"
+                      alt="Docker"
+                      class="w-6 h-6 object-contain scale-110 transition-all"
+                    />
+                  </a>
                 </div>
               </div>
             </div>

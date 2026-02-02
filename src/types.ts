@@ -97,6 +97,9 @@ export interface AppConfig {
   mobileRotationInterval?: number;
   mobileRotationMode?: "random" | "sequential";
   deviceMode?: "auto" | "desktop" | "tablet" | "mobile";
+  widgetAreaSize?: number;
+  widgetAreaCols?: number;
+  widgetAreaRows?: number;
   webGroupPagination?: boolean;
   webGroupPaginationDisableFlip?: boolean;
   backgroundBlur?: number;
@@ -105,6 +108,7 @@ export interface AppConfig {
   mobileBackgroundMask?: number;
   internalDomains?: string;
   forceNetworkMode?: "auto" | "lan" | "wan" | "latency";
+  latencyThresholdMs?: number;
   customTitle: string;
   titleAlign: "left" | "center" | "right" | string;
   titleSize: number;

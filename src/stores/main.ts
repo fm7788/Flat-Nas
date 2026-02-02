@@ -135,7 +135,7 @@ export const useMainStore = defineStore("main", () => {
   };
 
   // Version Check
-  const currentVersion = "1.0.74dev5";
+  const currentVersion = "1.0.75";
   const latestVersion = ref("");
   const dockerUpdateAvailable = ref(false);
   const updateCheckLastAt = useStorage<number>("flat-nas-update-check-last-at", 0);
@@ -213,6 +213,9 @@ export const useMainStore = defineStore("main", () => {
     enableMobileWallpaper: true,
     fixedWallpaper: false,
     deviceMode: "auto",
+    widgetAreaSize: 4,
+    widgetAreaCols: 4,
+    widgetAreaRows: 4,
     pcRotation: false,
     pcRotationInterval: 30,
     pcRotationMode: "random",
@@ -274,6 +277,7 @@ export const useMainStore = defineStore("main", () => {
     customJs: "",
     customJsDisclaimerAgreed: false,
     mouseHoverEffect: "scale",
+    latencyThresholdMs: 200,
   });
 
   const CACHE_KEY = "flat-nas-data-cache";
@@ -542,6 +546,21 @@ export const useMainStore = defineStore("main", () => {
     if (cachedColor) appConfig.value.groupTitleColor = cachedColor;
     const cachedCardBg = localStorage.getItem("flat-nas-card-bg-color");
     if (cachedCardBg) appConfig.value.cardBgColor = cachedCardBg;
+
+    if (typeof appConfig.value.widgetAreaCols !== "number") {
+      if (typeof appConfig.value.widgetAreaSize === "number") {
+        appConfig.value.widgetAreaCols = appConfig.value.widgetAreaSize;
+      } else {
+        appConfig.value.widgetAreaCols = 4;
+      }
+    }
+    if (typeof appConfig.value.widgetAreaRows !== "number") {
+      if (typeof appConfig.value.widgetAreaSize === "number") {
+        appConfig.value.widgetAreaRows = appConfig.value.widgetAreaSize;
+      } else {
+        appConfig.value.widgetAreaRows = 4;
+      }
+    }
 
     if (data.rssFeeds) rssFeeds.value = data.rssFeeds;
     if (data.rssCategories) rssCategories.value = data.rssCategories;
@@ -967,6 +986,21 @@ export const useMainStore = defineStore("main", () => {
     (val) => {
       if (typeof val === "string") localStorage.setItem("flat-nas-card-bg-color", val);
     },
+  );
+
+  watch(
+    () => [appConfig.value.widgetAreaCols, appConfig.value.widgetAreaRows] as const,
+    ([cols, rows]) => {
+      const normalize = (v: unknown, fallback: number) => {
+        const n = typeof v === "number" && Number.isFinite(v) ? Math.trunc(v) : fallback;
+        return Math.min(16, Math.max(1, n));
+      };
+      const nextCols = normalize(cols, 4);
+      const nextRows = normalize(rows, 4);
+      if (nextCols !== cols) appConfig.value.widgetAreaCols = nextCols;
+      if (nextRows !== rows) appConfig.value.widgetAreaRows = nextRows;
+    },
+    { immediate: true },
   );
 
   watch(
