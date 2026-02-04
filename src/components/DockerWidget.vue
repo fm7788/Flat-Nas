@@ -29,6 +29,7 @@ type DockerContainer = {
   State: string;
   Status: string;
   Ports: DockerPort[];
+  hasUpdate?: boolean;
   stats?: DockerStats;
   mockStartAt?: number;
 };
@@ -1012,59 +1013,72 @@ const getStatusColor = (state: string) => {
           :key="c.Id"
           class="flex flex-col gap-1 p-1.5 bg-white rounded-lg border border-black"
         >
-          <div class="flex items-center justify-between">
-            <div class="flex items-center gap-2 overflow-hidden flex-1">
-              <div :class="['w-2 h-2 rounded-full shrink-0', getStatusColor(c.State)]"></div>
-              <div class="flex flex-col overflow-hidden min-w-0">
-                <span class="font-medium text-sm truncate text-black" :title="c.Names?.[0] || ''">
-                  {{ (c.Names?.[0] || "").replace(/^\//, "") }}
-                </span>
-                <span class="text-[10px] text-black truncate block" :title="c.Image">
-                  {{ c.Image }}
-                </span>
-              </div>
-              <button
-                @click="promptPublicHost(c)"
-                class="text-[10px] text-black hover:underline px-1 shrink-0"
-                title="添加外网地址"
-              >
-                添加外网地址
-              </button>
-              <div v-if="editingPublicId === c.Id" class="flex items-center gap-1 ml-2 shrink-0">
-                <input
-                  v-model="publicHostTemp"
-                  type="text"
-                  placeholder="nas.example.com"
-                  class="px-2 py-1 border border-gray-200 rounded text-[10px] focus:border-blue-500 outline-none w-36"
-                />
-                <button
-                  @click="savePublicHost(c)"
-                  class="text-[10px] text-green-600 hover:underline px-1"
-                  title="保存"
-                >
-                  保存
-                </button>
-                <button
-                  @click="cancelPublicHost"
-                  class="text-[10px] text-gray-500 hover:underline px-1"
-                  title="取消"
-                >
-                  取消
-                </button>
+          <div class="grid grid-cols-[1fr_auto] gap-2 items-start">
+            <div class="flex items-start gap-2 min-w-0">
+              <div :class="['w-2 h-2 rounded-full shrink-0 mt-1', getStatusColor(c.State)]"></div>
+              <div class="flex flex-col min-w-0 flex-1">
+                <div class="flex items-center gap-1 min-w-0">
+                  <span class="font-medium text-sm truncate text-black" :title="c.Names?.[0] || ''">
+                    {{ (c.Names?.[0] || "").replace(/^\//, "") }}
+                  </span>
+                  <span
+                    v-if="c.hasUpdate"
+                    class="text-[9px] bg-red-50 text-red-600 px-1 rounded border border-red-200 shrink-0"
+                  >
+                    可升级
+                  </span>
+                </div>
+                <div class="flex items-center gap-2 min-w-0">
+                  <span class="text-[10px] text-black truncate min-w-0 flex-1" :title="c.Image">
+                    {{ c.Image }}
+                  </span>
+                  <button
+                    @click="promptPublicHost(c)"
+                    class="text-[10px] text-black hover:underline px-1 shrink-0"
+                    title="添加外网地址"
+                  >
+                    添加外网地址
+                  </button>
+                </div>
+                <div v-if="editingPublicId === c.Id" class="flex items-center gap-1 mt-1">
+                  <input
+                    v-model="publicHostTemp"
+                    type="text"
+                    placeholder="nas.example.com"
+                    class="px-2 py-1 border border-gray-200 rounded text-[10px] focus:border-blue-500 outline-none w-36"
+                  />
+                  <button
+                    @click="savePublicHost(c)"
+                    class="text-[10px] text-green-600 hover:underline px-1"
+                    title="保存"
+                  >
+                    保存
+                  </button>
+                  <button
+                    @click="cancelPublicHost"
+                    class="text-[10px] text-gray-500 hover:underline px-1"
+                    title="取消"
+                  >
+                    取消
+                  </button>
+                </div>
               </div>
             </div>
-            <div class="flex flex-col items-end shrink-0 ml-2">
+            <div class="flex flex-col items-end shrink-0">
               <span class="text-[10px] text-black">{{ c.Status }}</span>
-              <div class="flex gap-1 mt-0.5" v-if="getDetectedPorts(c).length">
+              <div
+                class="flex flex-wrap justify-end gap-1 mt-0.5"
+                v-if="getDetectedPorts(c).length"
+              >
                 <span
-                  v-for="(p, i) in getDetectedPorts(c).slice(0, 1)"
+                  v-for="(p, i) in getDetectedPorts(c).slice(0, 2)"
                   :key="i"
                   class="text-[9px] bg-blue-50 text-blue-500 px-1 rounded border border-blue-100"
                 >
                   {{ p }}
                 </span>
-                <span v-if="getDetectedPorts(c).length > 1" class="text-[9px] text-black"
-                  >+{{ getDetectedPorts(c).length - 1 }}</span
+                <span v-if="getDetectedPorts(c).length > 2" class="text-[9px] text-black"
+                  >+{{ getDetectedPorts(c).length - 2 }}</span
                 >
               </div>
             </div>
@@ -1126,11 +1140,11 @@ const getStatusColor = (state: string) => {
           <div
             class="flex items-center justify-end gap-2 mt-1 pt-1 border-t border-gray-100 dark:border-gray-700"
           >
-            <div class="flex items-center gap-2 mr-auto whitespace-nowrap">
+            <div class="flex flex-wrap items-center gap-1 mr-auto min-w-0">
               <button
                 v-if="c.State === 'running' && getPreferredPort(c)"
                 @click="openContainerUrl(c)"
-                class="px-2 py-1 hover:bg-gray-100 text-black rounded transition-colors text-xs flex items-center gap-1 whitespace-nowrap"
+                class="px-2 py-1 hover:bg-gray-100 text-black rounded transition-colors text-xs flex items-center gap-1"
                 title="内网打开"
               >
                 <svg
@@ -1150,7 +1164,7 @@ const getStatusColor = (state: string) => {
               <button
                 v-if="c.State === 'running' && getPreferredPort(c)"
                 @click="openContainerPublicUrl(c)"
-                class="px-2 py-1 hover:bg-gray-100 text-black rounded transition-colors text-xs flex items-center gap-1 whitespace-nowrap"
+                class="px-2 py-1 hover:bg-gray-100 text-black rounded transition-colors text-xs flex items-center gap-1"
                 title="外网打开"
               >
                 <svg
@@ -1170,7 +1184,7 @@ const getStatusColor = (state: string) => {
               <button
                 v-if="c.State === 'running'"
                 @click="addToHome(c)"
-                class="px-2 py-1 hover:bg-gray-100 text-black rounded transition-colors text-xs flex items-center gap-1 whitespace-nowrap"
+                class="px-2 py-1 hover:bg-gray-100 text-black rounded transition-colors text-xs flex items-center gap-1"
                 title="添加到桌面"
               >
                 <svg
@@ -1203,65 +1217,66 @@ const getStatusColor = (state: string) => {
                 <span class="text-xs text-black">禁止自动升级</span>
               </label>
             </div>
-
-            <button
-              v-if="c.State !== 'running'"
-              @click="handleAction(c.Id, 'start')"
-              class="p-1 hover:bg-green-100 text-green-600 rounded transition-colors"
-              title="启动"
-            >
-              <svg
-                xmlns="http://www.w3.org/2000/svg"
-                viewBox="0 0 24 24"
-                fill="currentColor"
-                class="w-4 h-4"
+            <div class="flex items-center gap-1 shrink-0">
+              <button
+                v-if="c.State !== 'running'"
+                @click="handleAction(c.Id, 'start')"
+                class="p-1 hover:bg-green-100 text-green-600 rounded transition-colors"
+                title="启动"
               >
-                <path
-                  fill-rule="evenodd"
-                  d="M4.5 5.653c0-1.426 1.529-2.33 2.779-1.643l11.54 6.348c1.295.712 1.295 2.573 0 3.285L7.28 19.991c-1.25.687-2.779-.217-2.779-1.643V5.653z"
-                  clip-rule="evenodd"
-                />
-              </svg>
-            </button>
+                <svg
+                  xmlns="http://www.w3.org/2000/svg"
+                  viewBox="0 0 24 24"
+                  fill="currentColor"
+                  class="w-4 h-4"
+                >
+                  <path
+                    fill-rule="evenodd"
+                    d="M4.5 5.653c0-1.426 1.529-2.33 2.779-1.643l11.54 6.348c1.295.712 1.295 2.573 0 3.285L7.28 19.991c-1.25.687-2.779-.217-2.779-1.643V5.653z"
+                    clip-rule="evenodd"
+                  />
+                </svg>
+              </button>
 
-            <button
-              v-if="c.State === 'running'"
-              @click="handleAction(c.Id, 'stop')"
-              class="p-1 hover:bg-red-100 text-red-600 rounded transition-colors"
-              title="停止"
-            >
-              <svg
-                xmlns="http://www.w3.org/2000/svg"
-                viewBox="0 0 24 24"
-                fill="currentColor"
-                class="w-4 h-4"
+              <button
+                v-if="c.State === 'running'"
+                @click="handleAction(c.Id, 'stop')"
+                class="p-1 hover:bg-red-100 text-red-600 rounded transition-colors"
+                title="停止"
               >
-                <path
-                  fill-rule="evenodd"
-                  d="M4.5 7.5a3 3 0 013-3h9a3 3 0 013 3v9a3 3 0 01-3 3h-9a3 3 0 01-3-3v-9z"
-                  clip-rule="evenodd"
-                />
-              </svg>
-            </button>
+                <svg
+                  xmlns="http://www.w3.org/2000/svg"
+                  viewBox="0 0 24 24"
+                  fill="currentColor"
+                  class="w-4 h-4"
+                >
+                  <path
+                    fill-rule="evenodd"
+                    d="M4.5 7.5a3 3 0 013-3h9a3 3 0 013 3v9a3 3 0 01-3 3h-9a3 3 0 01-3-3v-9z"
+                    clip-rule="evenodd"
+                  />
+                </svg>
+              </button>
 
-            <button
-              @click="handleAction(c.Id, 'restart')"
-              class="p-1 hover:bg-blue-100 text-blue-600 rounded transition-colors"
-              title="重启"
-            >
-              <svg
-                xmlns="http://www.w3.org/2000/svg"
-                viewBox="0 0 24 24"
-                fill="currentColor"
-                class="w-4 h-4"
+              <button
+                @click="handleAction(c.Id, 'restart')"
+                class="p-1 hover:bg-blue-100 text-blue-600 rounded transition-colors"
+                title="重启"
               >
-                <path
-                  fill-rule="evenodd"
-                  d="M4.755 10.059a7.5 7.5 0 0112.548-3.364l1.903 1.903h-3.183a.75.75 0 100 1.5h4.992a.75.75 0 00.75-.75V4.356a.75.75 0 00-1.5 0v3.18l-1.9-1.9A9 9 0 003.306 9.67a.75.75 0 101.45.388zm15.408 3.352a.75.75 0 00-.919.53 7.5 7.5 0 01-12.548 3.364l-1.902-1.903h3.183a.75.75 0 000-1.5H2.984a.75.75 0 00-.75.75v4.992a.75.75 0 001.5 0v-3.18l1.9 1.9a9 9 0 0015.059-4.035.75.75 0 00-.53-.919z"
-                  clip-rule="evenodd"
-                />
-              </svg>
-            </button>
+                <svg
+                  xmlns="http://www.w3.org/2000/svg"
+                  viewBox="0 0 24 24"
+                  fill="currentColor"
+                  class="w-4 h-4"
+                >
+                  <path
+                    fill-rule="evenodd"
+                    d="M4.755 10.059a7.5 7.5 0 0112.548-3.364l1.903 1.903h-3.183a.75.75 0 100 1.5h4.992a.75.75 0 00.75-.75V4.356a.75.75 0 00-1.5 0v3.18l-1.9-1.9A9 9 0 003.306 9.67a.75.75 0 101.45.388zm15.408 3.352a.75.75 0 00-.919.53 7.5 7.5 0 01-12.548 3.364l-1.902-1.903h3.183a.75.75 0 000-1.5H2.984a.75.75 0 00-.75.75v4.992a.75.75 0 001.5 0v-3.18l1.9 1.9a9 9 0 0015.059-4.035.75.75 0 00-.53-.919z"
+                    clip-rule="evenodd"
+                  />
+                </svg>
+              </button>
+            </div>
           </div>
         </div>
       </div>

@@ -139,16 +139,22 @@ const handleHorizontalScroll = (e: WheelEvent) => {
 
 <template>
   <div
-    class="w-full h-full backdrop-blur border border-white/40 rounded-2xl flex flex-col overflow-hidden shadow-sm hover:shadow-md transition-all group"
-    :style="{ backgroundColor: `rgba(255, 255, 255, ${widget?.opacity ?? 0.8})` }"
+    class="w-full h-full rounded-2xl backdrop-blur border border-white/10 overflow-hidden flex flex-col text-white relative transition-shadow"
+    :style="{
+      backgroundColor: `rgba(0,0,0,${Math.min(0.85, Math.max(0.15, widget?.opacity ?? 0.35))})`,
+      color: '#fff',
+    }"
   >
     <!-- Header / Tabs -->
     <div
       ref="tabsRef"
       @wheel.prevent="handleHorizontalScroll"
-      class="flex border-b border-gray-100 bg-white/50 select-none overflow-x-auto custom-scrollbar"
+      class="flex border-b border-white/10 bg-white/10 select-none overflow-x-auto custom-scrollbar"
     >
-      <div v-if="enabledFeeds.length === 0" class="w-full py-2.5 text-xs text-gray-400 text-center">
+      <div
+        v-if="enabledFeeds.length === 0"
+        class="w-full py-2.5 text-xs text-white/60 text-center"
+      >
         暂无订阅源
       </div>
       <button
@@ -158,14 +164,14 @@ const handleHorizontalScroll = (e: WheelEvent) => {
         class="flex-shrink-0 px-4 py-2.5 text-xs font-bold transition-all flex items-center justify-center gap-1.5 relative whitespace-nowrap"
         :class="
           activeFeedId === feed.id
-            ? 'text-orange-600 bg-orange-50/50'
-            : 'text-gray-500 hover:bg-gray-50 hover:text-gray-700'
+            ? 'text-white bg-white/15'
+            : 'text-white/60 hover:bg-white/10 hover:text-white'
         "
       >
         <span>{{ feed.title }}</span>
         <div
           v-if="activeFeedId === feed.id"
-          class="absolute bottom-0 left-0 right-0 h-0.5 bg-orange-500"
+          class="absolute bottom-0 left-0 right-0 h-0.5 bg-white/60"
         ></div>
       </button>
     </div>
@@ -175,7 +181,7 @@ const handleHorizontalScroll = (e: WheelEvent) => {
       <div class="h-full overflow-y-auto custom-scrollbar p-0" @wheel="handleScrollIsolation">
         <div
           v-if="enabledFeeds.length === 0"
-          class="h-full flex flex-col items-center justify-center text-gray-400 p-4 text-center"
+          class="h-full flex flex-col items-center justify-center text-white/60 p-4 text-center"
         >
           <span class="text-2xl mb-2">📡</span>
           <span class="text-xs">请在设置中添加并启用 RSS 订阅源</span>
@@ -183,16 +189,16 @@ const handleHorizontalScroll = (e: WheelEvent) => {
 
         <div
           v-else-if="loading && list.length === 0"
-          class="p-8 text-center text-gray-400 text-xs animate-pulse"
+          class="p-8 text-center text-white/60 text-xs animate-pulse"
         >
           加载中...
         </div>
 
-        <div v-else-if="errorMsg" class="p-8 text-center text-red-400 text-xs">
+        <div v-else-if="errorMsg" class="p-8 text-center text-white/70 text-xs">
           {{ errorMsg }}
           <button
             @click="fetchFeed(enabledFeeds.find((f) => f.id === activeFeedId)!, true)"
-            class="block mx-auto mt-2 text-blue-500 hover:underline"
+            class="block mx-auto mt-2 text-white/80 hover:text-white hover:underline"
           >
             重试
           </button>
@@ -204,21 +210,21 @@ const handleHorizontalScroll = (e: WheelEvent) => {
             :key="index"
             :href="item.link"
             target="_blank"
-            class="block px-3 py-2 hover:bg-gray-50 transition-colors group/item border-b border-gray-50 last:border-0"
+            class="block px-3 py-2 hover:bg-white/10 transition-colors group/item border-b border-white/10 last:border-0"
           >
             <div
-              class="text-sm text-gray-700 group-hover/item:text-orange-600 transition-colors font-medium line-clamp-2 mb-1"
+              class="text-sm text-white/80 group-hover/item:text-white transition-colors font-medium line-clamp-2 mb-1"
             >
               {{ item.title }}
             </div>
             <div class="flex justify-between items-center">
               <div
                 v-if="item.contentSnippet"
-                class="text-[10px] text-gray-400 line-clamp-1 flex-1 mr-2"
+                class="text-[10px] text-white/50 line-clamp-1 flex-1 mr-2"
               >
                 {{ item.contentSnippet }}
               </div>
-              <div v-if="item.pubDate" class="text-[10px] text-gray-300 whitespace-nowrap">
+              <div v-if="item.pubDate" class="text-[10px] text-white/40 whitespace-nowrap">
                 {{ new Date(item.pubDate).toLocaleDateString() }}
               </div>
             </div>

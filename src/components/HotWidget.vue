@@ -27,33 +27,33 @@ const tabs = ref<TabConfig[]>([
     id: "weibo",
     label: "微博",
     icon: "🔥",
-    activeClass: "text-red-600 bg-red-50/50",
-    barClass: "bg-red-500",
-    indexClass: "text-red-500 bg-red-50",
+    activeClass: "text-white bg-white/15",
+    barClass: "bg-white/60",
+    indexClass: "text-white bg-white/15",
   },
   {
     id: "news",
     label: "中新网",
     icon: "🗞️",
-    activeClass: "text-blue-600 bg-blue-50/50",
-    barClass: "bg-blue-500",
-    indexClass: "text-blue-500 bg-blue-50",
+    activeClass: "text-white bg-white/15",
+    barClass: "bg-white/60",
+    indexClass: "text-white bg-white/15",
   },
   {
     id: "zhihu",
     label: "知乎",
     icon: "🧠",
-    activeClass: "text-blue-500 bg-blue-50/50",
-    barClass: "bg-blue-500",
-    indexClass: "text-blue-500 bg-blue-50",
+    activeClass: "text-white bg-white/15",
+    barClass: "bg-white/60",
+    indexClass: "text-white bg-white/15",
   },
   {
     id: "bilibili",
     label: "B站",
     icon: "📺",
-    activeClass: "text-pink-500 bg-pink-50/50",
-    barClass: "bg-pink-500",
-    indexClass: "text-pink-500 bg-pink-50",
+    activeClass: "text-white bg-white/15",
+    barClass: "bg-white/60",
+    indexClass: "text-white bg-white/15",
   },
 ]);
 
@@ -131,12 +131,15 @@ const handleScrollIsolation = (e: WheelEvent) => {
 
 <template>
   <div
-    class="w-full h-full backdrop-blur border border-white/40 rounded-2xl flex flex-col overflow-hidden shadow-sm hover:shadow-md transition-all group"
-    :style="{ backgroundColor: `rgba(255, 255, 255, ${widget.opacity ?? 0.8})` }"
+    class="w-full h-full rounded-2xl backdrop-blur border border-white/10 overflow-hidden flex flex-col text-white relative transition-shadow"
+    :style="{
+      backgroundColor: `rgba(0,0,0,${Math.min(0.85, Math.max(0.15, widget.opacity ?? 0.35))})`,
+      color: '#fff',
+    }"
   >
     <VueDraggable
       v-model="tabs"
-      class="flex border-b border-gray-100 bg-white/50 select-none"
+      class="flex border-b border-white/10 bg-white/10 select-none"
       :animation="150"
     >
       <button
@@ -147,7 +150,7 @@ const handleScrollIsolation = (e: WheelEvent) => {
         :class="
           activeTab === tab.id
             ? tab.activeClass
-            : 'text-gray-500 hover:bg-gray-50 hover:text-gray-700'
+            : 'text-white/60 hover:bg-white/10 hover:text-white'
         "
       >
         <span class="text-sm">{{ tab.icon }}</span>
@@ -164,7 +167,7 @@ const handleScrollIsolation = (e: WheelEvent) => {
       <div class="h-full overflow-y-auto custom-scrollbar p-0" @wheel="handleScrollIsolation">
         <div
           v-if="loading && list.length === 0"
-          class="p-8 text-center text-gray-400 text-xs animate-pulse"
+          class="p-8 text-center text-white/60 text-xs animate-pulse"
         >
           加载中...
         </div>
@@ -174,25 +177,25 @@ const handleScrollIsolation = (e: WheelEvent) => {
             :key="index"
             :href="item.url"
             target="_blank"
-            class="block px-3 py-1 hover:bg-gray-50 transition-colors group/item flex items-start gap-2"
+            class="block px-3 py-1 hover:bg-white/10 transition-colors group/item flex items-start gap-2"
           >
             <span
               class="text-xs font-bold min-w-[1.25rem] h-5 flex items-center justify-center rounded mt-0.5 transition-colors"
               :class="
                 index < 3
                   ? tabs.find((t) => t.id === activeTab)?.indexClass
-                  : 'text-gray-400 bg-gray-100'
+                  : 'text-white/60 bg-white/10'
               "
             >
               {{ index + 1 }}
             </span>
             <div class="flex-1 min-w-0">
               <div
-                class="text-sm text-gray-700 group-hover/item:text-blue-600 transition-colors line-clamp-2 leading-relaxed"
+                class="text-sm text-white/80 group-hover/item:text-white transition-colors line-clamp-2 leading-relaxed"
               >
                 {{ item.title }}
               </div>
-              <div v-if="item.hot" class="text-xs text-gray-400 mt-0.5">{{ item.hot }}</div>
+              <div v-if="item.hot" class="text-xs text-white/50 mt-0.5">{{ item.hot }}</div>
             </div>
           </a>
         </div>

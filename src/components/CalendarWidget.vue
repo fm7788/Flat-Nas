@@ -210,14 +210,11 @@ const isHovered = ref(false);
     @mouseenter="isHovered = true"
     @mouseleave="isHovered = false"
     :class="[
-      widget.textColor ? '' : widget.data?.style !== 'day' ? 'text-gray-700' : 'text-white',
+      widget.textColor ? '' : 'text-white',
       'rounded-2xl backdrop-blur border border-white/10',
     ]"
     :style="{
-      backgroundColor:
-        widget.data?.style === 'day'
-          ? `rgba(239, 68, 68, ${isHovered ? Math.min((widget.opacity ?? 0.2) + 0.1, 1) : (widget.opacity ?? 0.2)})`
-          : `rgba(255, 255, 255, ${widget.opacity ?? 0.9})`,
+      backgroundColor: `rgba(0, 0, 0, ${widget.opacity ?? 0.35})`,
       color: widget.textColor || undefined,
     }"
   >
@@ -225,7 +222,7 @@ const isHovered = ref(false);
       @click.stop="toggleStyle"
       class="absolute top-2 right-2 z-20 opacity-0 group-hover:opacity-100 transition-opacity p-1.5 rounded-full hover:bg-black/10 active:scale-95"
       title="切换视图"
-      :class="widget.data?.style !== 'day' ? 'text-gray-600' : 'text-white'"
+      :class="widget.data?.style !== 'day' ? 'text-white/70' : 'text-white'"
     >
       <svg
         xmlns="http://www.w3.org/2000/svg"
@@ -292,7 +289,7 @@ const isHovered = ref(false);
       <div class="flex items-center justify-center gap-1 mb-1 leading-none">
         <button
           @click.stop="prevMonth"
-          class="p-0.5 md:p-1 hover:bg-gray-200 rounded text-gray-600 transition-colors"
+          class="p-0.5 md:p-1 hover:bg-white/10 rounded text-white/70 transition-colors"
         >
           <svg
             xmlns="http://www.w3.org/2000/svg"
@@ -307,12 +304,15 @@ const isHovered = ref(false);
             />
           </svg>
         </button>
-        <span class="text-xs md:text-sm font-bold cursor-pointer select-none" @click="goToday">
+        <span
+          class="text-xs md:text-sm font-bold cursor-pointer select-none text-white"
+          @click="goToday"
+        >
           {{ currentMonth.getFullYear() }}.{{ currentMonth.getMonth() + 1 }}
         </span>
         <button
           @click.stop="nextMonth"
-          class="p-0.5 md:p-1 hover:bg-gray-200 rounded text-gray-600 transition-colors"
+          class="p-0.5 md:p-1 hover:bg-white/10 rounded text-white/70 transition-colors"
         >
           <svg
             xmlns="http://www.w3.org/2000/svg"
@@ -330,27 +330,23 @@ const isHovered = ref(false);
       </div>
 
       <div
-        class="grid grid-cols-7 gap-0.5 md:gap-1 text-center text-[10px] md:text-[12px] leading-none"
+        class="grid grid-cols-7 gap-0.5 md:gap-1 text-center text-[10px] md:text-[12px] leading-none text-white/60"
       >
-        <div
-          v-for="d in ['日', '一', '二', '三', '四', '五', '六']"
-          :key="d"
-          class="text-gray-400 font-medium"
-        >
+        <div v-for="d in ['日', '一', '二', '三', '四', '五', '六']" :key="d" class="font-medium">
           {{ d }}
         </div>
       </div>
 
       <div
-        class="calendar-days-grid grid grid-cols-7 gap-0 md:gap-0.5 text-center flex-1 min-h-0 overflow-y-auto text-[10px] md:text-[12px] content-start"
+        class="calendar-days-grid grid grid-cols-7 gap-0 md:gap-0.5 text-center flex-1 min-h-0 overflow-y-auto text-[10px] md:text-[12px] content-start text-white/90"
       >
         <div
           v-for="(d, i) in calendarDays"
           :key="i"
           class="aspect-auto md:aspect-square flex items-center justify-center rounded-xl transition-all"
           :class="{
-            'text-red-600 font-bold': d.today,
-            'hover:bg-red-100': d.current && !d.today,
+            'text-blue-300 font-bold': d.today,
+            'hover:bg-white/10': d.current && !d.today,
             invisible: !d.current,
             'cursor-pointer': d.current,
           }"

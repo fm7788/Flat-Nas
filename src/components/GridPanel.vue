@@ -17,6 +17,7 @@ import { useWallpaperRotation } from "../composables/useWallpaperRotation";
 import { useDevice } from "../composables/useDevice";
 import { generateLayout, type GridLayoutItem } from "../utils/gridLayout";
 import type { NavItem, WidgetConfig, NavGroup } from "@/types";
+import { isInternalNetwork, getNetworkConfig } from "@/utils/network";
 const EditModal = defineAsyncComponent(() => import("./EditModal.vue"));
 const SettingsModal = defineAsyncComponent(() => import("./SettingsModal.vue"));
 const GroupSettingsModal = defineAsyncComponent(() => import("./GroupSettingsModal.vue"));
@@ -94,30 +95,23 @@ watch(showGroupSettingsModal, (val) => {
 });
 const isLanMode = ref(false);
 const latency = ref(0);
-const isChecking = ref(true);
+const isChecking = ref(false);
 const networkScope = typeof window !== "undefined" ? window.location.hostname : "default";
+const networkConfig = computed(() => getNetworkConfig(store.appConfig));
 const forceMode = computed({
-  get: () => store.appConfig.forceNetworkMode || "auto",
+  get: () => networkConfig.value.forceNetworkMode,
   set: (val) => {
     store.appConfig.forceNetworkMode = val;
     store.saveData();
   },
 });
-const DEFAULT_LATENCY_THRESHOLD_MS = 200;
-const latencyThresholdMs = computed(() => {
-  const raw = store.appConfig.latencyThresholdMs;
-  const n =
-    typeof raw === "number" && Number.isFinite(raw)
-      ? Math.trunc(raw)
-      : DEFAULT_LATENCY_THRESHOLD_MS;
-  return Math.min(30000, Math.max(20, n));
-});
+const latencyThresholdMs = computed(() => networkConfig.value.latencyThresholdMs);
 
 const effectiveIsLan = computed(() => {
+  if (!store.isLanModeInited) return false;
   if (forceMode.value === "lan") return true;
   if (forceMode.value === "wan") return false;
   if (forceMode.value === "latency") {
-    if (isLanMode.value) return true;
     if (latency.value > 0) return latency.value < latencyThresholdMs.value;
     return false;
   }
@@ -235,38 +229,6 @@ const processIcon = (iconStr: string) => {
   return fixed;
 };
 // --- 核心修复逻辑结束 ---
-
-const isInternalNetwork = (url: string) => {
-  if (!url) return false;
-
-  // 1. IPv4 Private Ranges & Localhost
-  if (url.includes("localhost") || url.includes("127.0.0.1")) return true;
-  if (/^(192\.168|10\.|172\.(1[6-9]|2\d|3[0-1]))\./.test(url)) return true;
-
-  // 2. IPv6 Private Ranges
-  // ::1 (Loopback)
-  if (url === "::1" || url.includes("[::1]")) return true;
-  // fe80::/10 (Link-Local) -> fe8... to feb...
-  if (/^fe[89ab][0-9a-f]:/i.test(url)) return true;
-  // fc00::/7 (Unique Local) -> fc... or fd...
-  if (/^f[cd][0-9a-f]{2}:/i.test(url)) return true;
-
-  // 3. mDNS (.local)
-  if (url.toLowerCase().endsWith(".local")) return true;
-
-  // 4. 用户自定义白名单 (支持域名后缀和 IP 前缀)
-  if (store.appConfig.internalDomains) {
-    const whitelist = store.appConfig.internalDomains
-      .split("\n")
-      .map((s: string) => s.trim())
-      .filter(Boolean);
-    for (const item of whitelist) {
-      if (url.includes(item)) return true;
-    }
-  }
-
-  return false;
-};
 
 // --- Wallpaper Preload Logic ---
 const isPcBgLoaded = ref(false);
@@ -793,15 +755,39 @@ const handleNetworkClick = async () => {
   }
 };
 
+const fetchWithTimeout = (input: RequestInfo | URL, init: RequestInit = {}, timeoutMs = 500) => {
+  const controller = new AbortController();
+  const timer = window.setTimeout(() => controller.abort(), timeoutMs);
+  return fetch(input, { ...init, signal: controller.signal }).finally(() => {
+    window.clearTimeout(timer);
+  });
+};
+
 const checkLatency = async () => {
-  isChecking.value = true;
-  const start = performance.now();
   try {
-    const res = await fetch(`/api/rtt?ts=${Date.now()}`, { method: "GET", cache: "no-store" });
-    await res.json().catch(() => null);
-    latency.value = Math.round(performance.now() - start);
-  } catch {
-    latency.value = 0;
+    if (isChecking.value) return;
+    isChecking.value = true;
+    const samples: number[] = [];
+    for (let i = 0; i < 2; i++) {
+      const start = performance.now();
+      try {
+        const res = await fetchWithTimeout(
+          `/api/rtt?ts=${Date.now()}`,
+          { method: "GET", cache: "no-store" },
+          500,
+        );
+        await res.json().catch(() => null);
+        samples.push(Math.round(performance.now() - start));
+      } catch {
+        if (forceMode.value === "latency") {
+          forceMode.value = "auto";
+        }
+      }
+      if (i === 0) {
+        await new Promise((resolve) => setTimeout(resolve, 60));
+      }
+    }
+    latency.value = samples.length > 0 ? Math.min(...samples) : 0;
   } finally {
     isChecking.value = false;
   }
@@ -819,7 +805,10 @@ watch(latencyThresholdMs, () => {
 });
 
 onMounted(() => {
-  isLanMode.value = isInternalNetwork(window.location.hostname);
+  isLanMode.value = isInternalNetwork(
+    window.location.hostname,
+    networkConfig.value.internalDomains,
+  );
   setTimeout(() => checkLatency(), 2000);
   fetchIp();
   store.init().then(() => {
@@ -1867,6 +1856,9 @@ const formattedLocation = computed(() => {
 const fetchIp = async (force = false) => {
   const CACHE_KEY = `flatnas_ip_cache:${networkScope}`;
   const CACHE_DURATION = 12 * 60 * 60 * 1000; // 12 hours in ms
+  const initialIsLanMode = isLanMode.value;
+  store.ipFetchStatus = "loading";
+  store.isLanModeInited = false;
 
   if (!force) {
     try {
@@ -1875,11 +1867,16 @@ const fetchIp = async (force = false) => {
         const { timestamp, data } = JSON.parse(cached);
         if (Date.now() - timestamp < CACHE_DURATION) {
           ipInfo.value = data;
-          const hostnameIsLan = isInternalNetwork(window.location.hostname);
+          const internalDomains = networkConfig.value.internalDomains;
+          const hostnameIsLan = isInternalNetwork(window.location.hostname, internalDomains);
           const canTrustClientIp = data?.clientIpSource === "header";
           const clientIsLan =
-            canTrustClientIp && !!data?.clientIp && isInternalNetwork(String(data.clientIp));
+            canTrustClientIp &&
+            !!data?.clientIp &&
+            isInternalNetwork(String(data.clientIp), internalDomains);
           isLanMode.value = hostnameIsLan || clientIsLan;
+          store.ipFetchStatus = "success";
+          store.isLanModeInited = true;
           return;
         }
       }
@@ -1917,7 +1914,7 @@ const fetchIp = async (force = false) => {
 
   // 通过后端代理获取 IP (解决 CORS)
   try {
-    const res = await fetch("/api/ip");
+    const res = await fetchWithTimeout(`/api/ip?ts=${Date.now()}`, { method: "GET" }, 500);
     const data = await res.json();
 
     if (data.success) {
@@ -1926,31 +1923,31 @@ const fetchIp = async (force = false) => {
       ipInfo.value.clientIp = data.clientIp || "";
       ipInfo.value.clientIpSource = data.clientIpSource || "";
 
-      const hostnameIsLan = isInternalNetwork(window.location.hostname);
+      const internalDomains = networkConfig.value.internalDomains;
+      const hostnameIsLan = isInternalNetwork(window.location.hostname, internalDomains);
       const canTrustClientIp = ipInfo.value.clientIpSource === "header";
       const clientIsLan =
         canTrustClientIp &&
         !!ipInfo.value.clientIp &&
-        isInternalNetwork(String(ipInfo.value.clientIp));
+        isInternalNetwork(String(ipInfo.value.clientIp), internalDomains);
       isLanMode.value = hostnameIsLan || clientIsLan;
+      store.ipFetchStatus = "success";
     } else {
       ipInfo.value.displayIp = data.ip || "获取失败";
       ipInfo.value.location = "未知位置";
       ipInfo.value.clientIp = data.clientIp || "";
       ipInfo.value.clientIpSource = data.clientIpSource || "";
-
-      const hostnameIsLan = isInternalNetwork(window.location.hostname);
-      const canTrustClientIp = ipInfo.value.clientIpSource === "header";
-      const clientIsLan =
-        canTrustClientIp &&
-        !!ipInfo.value.clientIp &&
-        isInternalNetwork(String(ipInfo.value.clientIp));
-      isLanMode.value = hostnameIsLan || clientIsLan;
+      isLanMode.value = initialIsLanMode;
+      store.ipFetchStatus = "error";
     }
+    store.isLanModeInited = true;
     updateCache();
   } catch (e) {
     console.error("IP Fetch Error", e);
     ipInfo.value.displayIp = "Error";
+    isLanMode.value = initialIsLanMode;
+    store.ipFetchStatus = "error";
+    store.isLanModeInited = true;
     updateCache();
   }
 };
@@ -2462,8 +2459,11 @@ onMounted(() => {
             <CalculatorWidget v-else-if="widget.type === 'calculator'" />
             <div
               v-else-if="widget.type === 'ip'"
-              class="w-full h-full p-3 rounded-2xl backdrop-blur border border-white/15 flex flex-col items-center transition-colors text-center"
-              :style="{ backgroundColor: `rgba(255, 255, 255, ${widget.opacity ?? 0.2})` }"
+              class="w-full h-full p-3 rounded-2xl backdrop-blur border border-white/10 flex flex-col items-center transition-colors text-center text-white"
+              :style="{
+                backgroundColor: `rgba(0,0,0,${Math.min(0.85, Math.max(0.15, widget.opacity ?? 0.35))})`,
+                color: '#fff',
+              }"
             >
               <div
                 v-if="ipInfo.location"
@@ -2510,7 +2510,7 @@ onMounted(() => {
                 </div>
                 <button
                   @click="fetchIp(true)"
-                  class="text-[12px] bg-white/20 px-2.5 py-0.5 rounded hover:bg-white/30 transition-colors"
+                  class="text-[12px] text-white/80 bg-white/20 px-2.5 py-0.5 rounded hover:bg-white/30 transition-colors"
                 >
                   刷新
                 </button>

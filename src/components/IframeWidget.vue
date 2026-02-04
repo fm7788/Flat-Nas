@@ -151,7 +151,7 @@ watch(
 
     <!-- Controls Overlay (Visible on Hover for Desktop, Always for Mobile) -->
     <div
-      class="absolute top-2 right-2 opacity-100 md:opacity-0 md:group-hover:opacity-100 transition-opacity z-20 flex gap-1.5"
+      class="absolute left-2 top-1/2 -translate-y-1/2 opacity-100 md:opacity-0 md:group-hover:opacity-100 transition-opacity z-20 flex flex-col gap-1.5"
     >
       <button
         @click="refresh"

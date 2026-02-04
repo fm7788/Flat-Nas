@@ -2576,6 +2576,8 @@ const getClientIpInfo = (req) => {
 
 // IP Proxy
 app.get("/api/ip", async (req, res) => {
+  res.set("Cache-Control", "no-store, no-cache");
+  res.set("Pragma", "no-cache");
   const client = getClientIpInfo(req);
   const clientIp = client.ip;
 

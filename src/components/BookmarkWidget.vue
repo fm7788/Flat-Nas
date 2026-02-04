@@ -315,19 +315,16 @@ const handleScrollIsolation = (e: WheelEvent) => {
 
 <template>
   <div
-    class="w-full h-full backdrop-blur-md border border-white/40 rounded-2xl flex flex-col overflow-hidden shadow-sm relative group transition-colors"
+    class="w-full h-full rounded-2xl backdrop-blur border border-white/10 overflow-hidden flex flex-col text-white relative transition-shadow group"
     :style="{
-      backgroundColor: `rgba(255, 255, 255, ${widget.opacity ?? 0.9})`,
-      color: widget.textColor,
+      backgroundColor: `rgba(0,0,0,${Math.min(0.85, Math.max(0.15, widget.opacity ?? 0.35))})`,
+      color: '#fff',
     }"
   >
     <div
-      class="px-4 py-3 border-b border-gray-200/50 flex justify-between items-center bg-white/50 shrink-0"
+      class="px-4 py-3 border-b border-white/10 flex justify-between items-center bg-white/10 shrink-0"
     >
-      <div
-        class="font-bold text-sm flex items-center gap-2"
-        :class="!widget.textColor ? 'text-gray-800' : ''"
-      >
+      <div class="font-bold text-sm flex items-center gap-2 text-white">
         📑 收藏夹
       </div>
       <div class="flex-1 mx-4">
@@ -335,7 +332,7 @@ const handleScrollIsolation = (e: WheelEvent) => {
           v-model="searchQuery"
           type="text"
           placeholder="搜索书签..."
-          class="w-full text-xs px-2 py-1 rounded-md border border-gray-200 focus:outline-none focus:border-blue-400 bg-white/50 text-gray-900 placeholder-gray-500"
+          class="w-full text-xs px-2 py-1 rounded-md border border-white/20 focus:outline-none focus:border-white/40 bg-white/10 text-white placeholder-white/50"
         />
       </div>
       <div
@@ -351,14 +348,14 @@ const handleScrollIsolation = (e: WheelEvent) => {
         />
         <button
           @click="triggerImport"
-          class="text-xs bg-blue-100 text-blue-600 px-2 py-0.5 rounded hover:bg-blue-200"
+          class="text-xs bg-white/10 text-white/70 px-2 py-0.5 rounded hover:bg-white/20"
           title="导入浏览器收藏夹HTML"
         >
           导入
         </button>
         <button
           @click="addCategory"
-          class="text-xs bg-green-100 text-green-600 px-2 py-0.5 rounded hover:bg-green-200"
+          class="text-xs bg-white/10 text-white/70 px-2 py-0.5 rounded hover:bg-white/20"
         >
           + 分类
         </button>
@@ -368,26 +365,26 @@ const handleScrollIsolation = (e: WheelEvent) => {
     <div class="flex-1 overflow-y-auto p-4 space-y-6 scrollbar-hide" @wheel="handleScrollIsolation">
       <div
         v-if="isAddingCategory"
-        class="mb-4 p-3 bg-blue-50 rounded-xl border border-blue-100 animate-fade-in"
+        class="mb-4 p-3 bg-white/5 rounded-xl border border-white/10 animate-fade-in"
       >
-        <div class="text-xs font-bold text-blue-500 mb-2">添加新分类</div>
+        <div class="text-xs font-bold text-white/80 mb-2">添加新分类</div>
         <div class="flex gap-2">
           <input
             ref="categoryInputRef"
             v-model="newCategoryTitle"
             placeholder="分类名称"
-            class="flex-1 text-sm px-3 py-2 rounded-lg border bg-white text-gray-900 focus:outline-none focus:border-blue-300"
+            class="flex-1 text-sm px-3 py-2 rounded-lg border bg-white/10 text-white placeholder-white/50 focus:outline-none focus:border-white/40"
             @keyup.enter="confirmAddCategory"
           />
           <button
             @click="confirmAddCategory"
-            class="bg-blue-500 text-white text-xs px-3 py-2 rounded-lg hover:bg-blue-600 whitespace-nowrap"
+            class="bg-white/20 text-white text-xs px-3 py-2 rounded-lg hover:bg-white/30 whitespace-nowrap"
           >
             确定
           </button>
           <button
             @click="cancelAddCategory"
-            class="bg-gray-200 text-gray-600 text-xs px-3 py-2 rounded-lg hover:bg-gray-300 whitespace-nowrap"
+            class="bg-white/10 text-white/70 text-xs px-3 py-2 rounded-lg hover:bg-white/20 whitespace-nowrap"
           >
             取消
           </button>
@@ -395,10 +392,9 @@ const handleScrollIsolation = (e: WheelEvent) => {
       </div>
 
       <div v-for="cat in filteredData" :key="cat.id">
-        <div class="flex items-center justify-between mb-3 group/cat border-b border-gray-100 pb-1">
+        <div class="flex items-center justify-between mb-3 group/cat border-b border-white/10 pb-1">
           <span
-            class="font-bold text-sm flex items-center gap-1 cursor-pointer select-none"
-            :class="!widget.textColor ? 'text-gray-600' : ''"
+            class="font-bold text-sm flex items-center gap-1 cursor-pointer select-none text-white/70"
             @click="cat.collapsed = !cat.collapsed"
           >
             <span
@@ -414,11 +410,14 @@ const handleScrollIsolation = (e: WheelEvent) => {
           >
             <button
               @click="startAdd($event, cat)"
-              class="text-blue-500 hover:text-blue-700 text-xs font-bold"
+              class="text-white/70 hover:text-white text-xs font-bold"
             >
               + 添加
             </button>
-            <button @click="deleteItem(cat.id)" class="text-gray-300 hover:text-red-500 text-xs">
+            <button
+              @click="deleteItem(cat.id)"
+              class="text-white/50 hover:text-white/80 text-xs"
+            >
               删除分类
             </button>
           </div>
@@ -428,12 +427,12 @@ const handleScrollIsolation = (e: WheelEvent) => {
           <div
             v-for="link in cat.children"
             :key="link.id"
-            class="flex items-center gap-3 p-2 hover:bg-gray-100 rounded-xl cursor-pointer transition-all group/link border border-transparent hover:border-gray-200"
+            class="flex items-center gap-3 p-2 hover:bg-white/10 rounded-xl cursor-pointer transition-all group/link border border-transparent hover:border-white/10"
             @click.stop="openUrl(link.url)"
             title="点击跳转"
           >
             <div
-              class="w-10 h-10 rounded-lg bg-gray-100 flex items-center justify-center shrink-0 overflow-hidden border border-gray-200"
+              class="w-10 h-10 rounded-lg bg-white/10 flex items-center justify-center shrink-0 overflow-hidden border border-white/10"
             >
               <img
                 :src="store.getAssetUrl(link.icon)"
@@ -444,11 +443,10 @@ const handleScrollIsolation = (e: WheelEvent) => {
 
             <div class="flex flex-col min-w-0 flex-1">
               <span
-                class="font-medium text-sm truncate group-hover:text-blue-600"
-                :class="!widget.textColor ? 'text-gray-700' : ''"
+                class="font-medium text-sm truncate text-white/80 group-hover:text-white"
                 >{{ link.title }}</span
               >
-              <span class="text-xs text-gray-400 truncate">{{ link.url }}</span>
+              <span class="text-xs text-white/50 truncate">{{ link.url }}</span>
             </div>
 
             <div
@@ -457,14 +455,14 @@ const handleScrollIsolation = (e: WheelEvent) => {
             >
               <button
                 @click.stop="startEdit($event, cat, link)"
-                class="text-blue-400 hover:text-blue-600 p-1"
+                class="text-white/60 hover:text-white p-1"
                 title="编辑"
               >
                 ✎
               </button>
               <button
                 @click.stop="deleteItem(cat.id, link.id)"
-                class="text-gray-300 hover:text-red-500 p-1"
+                class="text-white/50 hover:text-white/80 p-1"
                 title="删除"
               >
                 ×
@@ -474,7 +472,7 @@ const handleScrollIsolation = (e: WheelEvent) => {
 
           <div
             v-if="cat.children.length === 0 && activeCategoryId !== cat.id"
-            class="text-sm text-gray-400 py-2 px-4 border border-dashed border-gray-200 rounded-lg select-none"
+            class="text-sm text-white/50 py-2 px-4 border border-dashed border-white/10 rounded-lg select-none"
           >
             (空文件夹)
           </div>
@@ -485,11 +483,11 @@ const handleScrollIsolation = (e: WheelEvent) => {
   <Teleport to="body">
     <div
       v-if="activeCategory"
-      class="fixed p-4 bg-white rounded-xl border border-blue-200 shadow-xl z-[9999]"
+      class="fixed p-4 bg-black/60 backdrop-blur rounded-xl border border-white/10 shadow-xl z-[9999] text-white"
       :style="{ top: popupPos.y + 'px', left: popupPos.x + 'px', width: '320px' }"
       @click.stop
     >
-      <div class="text-xs font-bold text-blue-500 mb-2">
+      <div class="text-xs font-bold text-white/80 mb-2">
         {{ editingLinkId ? "编辑书签" : "添加新书签" }}
       </div>
       <div class="grid grid-cols-1 gap-3 mb-3">
@@ -497,13 +495,13 @@ const handleScrollIsolation = (e: WheelEvent) => {
           <input
             v-model="newUrl"
             placeholder="网址 (例如: www.example.com)"
-            class="flex-1 text-sm px-3 py-2 rounded-lg border bg-gray-50 text-gray-900 focus:bg-white outline-none transition-all"
+            class="flex-1 text-sm px-3 py-2 rounded-lg border bg-white/10 text-white placeholder-white/50 focus:bg-white/10 outline-none transition-all"
             @blur="autoFetchIcon"
           />
           <button
             @click="autoFetchIcon"
             :disabled="isFetching"
-            class="px-3 bg-blue-50 text-blue-600 text-xs rounded-lg font-bold hover:bg-blue-100 transition-colors flex items-center gap-1"
+            class="px-3 bg-white/10 text-white/80 text-xs rounded-lg font-bold hover:bg-white/20 transition-colors flex items-center gap-1"
             title="自动获取标题和图标"
           >
             <span
@@ -516,36 +514,36 @@ const handleScrollIsolation = (e: WheelEvent) => {
         <input
           v-model="newTitle"
           placeholder="标题 (自动获取)"
-          class="w-full text-sm px-3 py-2 rounded-lg border bg-gray-50 text-gray-900 focus:bg-white outline-none transition-all"
+          class="w-full text-sm px-3 py-2 rounded-lg border bg-white/10 text-white placeholder-white/50 focus:bg-white/10 outline-none transition-all"
         />
         <div class="flex gap-2 items-center">
           <div
-            class="w-8 h-8 rounded bg-gray-100 flex items-center justify-center border overflow-hidden shrink-0"
+            class="w-8 h-8 rounded bg-white/10 flex items-center justify-center border border-white/10 overflow-hidden shrink-0"
           >
             <img
               v-if="newIcon"
               :src="store.getAssetUrl(newIcon)"
               class="w-full h-full object-cover"
             />
-            <span v-else class="text-xs text-gray-300">icon</span>
+            <span v-else class="text-xs text-white/40">icon</span>
           </div>
           <input
             v-model="newIcon"
             placeholder="图标地址 (自动获取)"
-            class="flex-1 text-sm px-3 py-2 rounded-lg border bg-gray-50 text-gray-900 focus:bg-white outline-none transition-all"
+            class="flex-1 text-sm px-3 py-2 rounded-lg border bg-white/10 text-white placeholder-white/50 focus:bg-white/10 outline-none transition-all"
           />
         </div>
       </div>
-      <div class="flex justify-end gap-2 border-t border-gray-100 pt-3">
+      <div class="flex justify-end gap-2 border-t border-white/10 pt-3">
         <button
           @click="cancelEdit"
-          class="text-sm text-gray-500 hover:bg-gray-100 px-3 py-1.5 rounded transition-colors"
+          class="text-sm text-white/70 hover:bg-white/10 px-3 py-1.5 rounded transition-colors"
         >
           取消
         </button>
         <button
           @click="confirmSubmit"
-          class="text-sm bg-blue-600 text-white px-4 py-1.5 rounded hover:bg-blue-700 shadow-md transition-all"
+          class="text-sm bg-white/20 text-white px-4 py-1.5 rounded hover:bg-white/30 shadow-md transition-all"
         >
           {{ editingLinkId ? "保存" : "添加" }}
         </button>

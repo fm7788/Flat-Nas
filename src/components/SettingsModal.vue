@@ -1740,6 +1740,35 @@ watch(activeTab, (val) => {
                   </button>
                 </div>
               </div>
+              <div class="grid grid-cols-2 gap-4 mb-2">
+                <div>
+                  <h4 class="text-sm font-medium text-gray-700 mb-1">标题大小</h4>
+                  <input
+                    type="range"
+                    v-model.number="store.appConfig.titleSize"
+                    min="20"
+                    max="80"
+                    class="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-blue-400"
+                  />
+                </div>
+                <div>
+                  <h4 class="text-sm font-medium text-gray-700 mb-1">标题颜色</h4>
+                  <div class="flex items-center gap-2">
+                    <input
+                      type="color"
+                      v-model="store.appConfig.titleColor"
+                      class="w-10 h-10 rounded cursor-pointer border-0 p-0"
+                    />
+                    <button
+                      @click="store.appConfig.titleColor = '#ffffff'"
+                      class="px-3 h-8 rounded-lg bg-red-50 hover:bg-red-100 flex items-center justify-center text-red-500 transition-colors text-xs font-medium"
+                      title="重置颜色"
+                    >
+                      重置
+                    </button>
+                  </div>
+                </div>
+              </div>
               <div class="mb-2">
                 <h5 class="text-sm font-medium text-gray-700 mb-2">WEB端布局</h5>
                 <div
@@ -1804,50 +1833,33 @@ watch(activeTab, (val) => {
                   </div>
                 </div>
               </div>
-              <div class="grid grid-cols-2 gap-4">
+              <div class="flex items-center justify-between mt-4 border-t pt-4 border-gray-100">
                 <div>
-                  <h4 class="text-sm font-medium text-gray-700 mb-1">标题大小</h4>
-                  <input
-                    type="range"
-                    v-model.number="store.appConfig.titleSize"
-                    min="20"
-                    max="80"
-                    class="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-blue-400"
-                  />
-                </div>
-                <div>
-                  <h4 class="text-sm font-medium text-gray-700 mb-1">标题颜色</h4>
-                  <div class="flex items-center gap-2">
-                    <input
-                      type="color"
-                      v-model="store.appConfig.titleColor"
-                      class="w-10 h-10 rounded cursor-pointer border-0 p-0"
-                    />
-                    <button
-                      @click="store.appConfig.titleColor = '#ffffff'"
-                      class="px-3 h-8 rounded-lg bg-red-50 hover:bg-red-100 flex items-center justify-center text-red-500 transition-colors text-xs font-medium"
-                      title="重置颜色"
+                  <div class="text-sm font-medium text-gray-700 flex items-center gap-1">
+                    自动适配带鱼屏
+                    <span
+                      class="text-[10px] px-1 py-0.5 bg-gray-100 text-gray-600 rounded leading-none font-normal"
+                      >内测中</span
                     >
-                      重置
-                    </button>
+                  </div>
+                  <div class="text-xs text-gray-500">
+                    检测到 21:9 或 32:9 分辨率时自动开启宽屏模式
                   </div>
                 </div>
-                <div>
-                  <h4 class="text-sm font-medium text-gray-700 mb-1">分组垂直间距</h4>
-                  <div class="flex items-center gap-2">
-                    <input
-                      type="range"
-                      v-model.number="store.appConfig.groupGap"
-                      min="0"
-                      max="100"
-                      step="5"
-                      class="flex-1 h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-blue-400"
-                    />
-                    <span class="text-xs text-gray-500 w-6">{{
-                      store.appConfig.groupGap ?? 30
-                    }}</span>
-                  </div>
-                </div>
+                <label class="relative inline-flex items-center cursor-pointer">
+                  <input
+                    type="checkbox"
+                    v-model="store.appConfig.autoUltrawide"
+                    class="sr-only peer"
+                    @change="handleUltrawideChange"
+                  />
+                  <div
+                    class="w-11 h-6 bg-gray-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600"
+                  ></div>
+                </label>
+              </div>
+
+              <div class="grid grid-cols-2 gap-4 mt-4">
                 <div>
                   <h4 class="text-sm font-medium text-gray-700 mb-1">组件区整区尺寸</h4>
                   <div class="flex items-center gap-2">
@@ -1874,19 +1886,19 @@ watch(activeTab, (val) => {
                   </div>
                 </div>
                 <div>
-                  <h4 class="text-sm font-medium text-gray-700 mb-1">黑暗模式</h4>
+                  <h4 class="text-sm font-medium text-gray-700 mb-1">分组垂直间距</h4>
                   <div class="flex items-center gap-2">
-                    <label class="relative inline-flex items-center cursor-pointer">
-                      <input
-                        type="checkbox"
-                        v-model="store.appConfig.empireMode"
-                        class="sr-only peer"
-                      />
-                      <div
-                        class="w-11 h-6 bg-gray-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600"
-                      ></div>
-                    </label>
-                    <span class="text-xs text-gray-500">开启明黄云纹模式</span>
+                    <input
+                      type="range"
+                      v-model.number="store.appConfig.groupGap"
+                      min="0"
+                      max="100"
+                      step="5"
+                      class="flex-1 h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-blue-400"
+                    />
+                    <span class="text-xs text-gray-500 w-6">{{
+                      store.appConfig.groupGap ?? 30
+                    }}</span>
                   </div>
                 </div>
                 <div>
@@ -1901,31 +1913,21 @@ watch(activeTab, (val) => {
                     <option value="none">无</option>
                   </select>
                 </div>
-
-                <div class="flex items-center justify-between mt-4 border-t pt-4 border-gray-100">
-                  <div>
-                    <div class="text-sm font-medium text-gray-700 flex items-center gap-1">
-                      自动适配带鱼屏
-                      <span
-                        class="text-[10px] px-1 py-0.5 bg-gray-100 text-gray-600 rounded leading-none font-normal"
-                        >内测中</span
-                      >
-                    </div>
-                    <div class="text-xs text-gray-500">
-                      检测到 21:9 或 32:9 分辨率时自动开启宽屏模式
-                    </div>
+                <div>
+                  <h4 class="text-sm font-medium text-gray-700 mb-1">黑暗模式</h4>
+                  <div class="flex items-center gap-2">
+                    <label class="relative inline-flex items-center cursor-pointer">
+                      <input
+                        type="checkbox"
+                        v-model="store.appConfig.empireMode"
+                        class="sr-only peer"
+                      />
+                      <div
+                        class="w-11 h-6 bg-gray-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600"
+                      ></div>
+                    </label>
+                    <span class="text-xs text-gray-500">开启明黄云纹模式</span>
                   </div>
-                  <label class="relative inline-flex items-center cursor-pointer">
-                    <input
-                      type="checkbox"
-                      v-model="store.appConfig.autoUltrawide"
-                      class="sr-only peer"
-                      @change="handleUltrawideChange"
-                    />
-                    <div
-                      class="w-11 h-6 bg-gray-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600"
-                    ></div>
-                  </label>
                 </div>
               </div>
             </div>
@@ -2043,7 +2045,7 @@ watch(activeTab, (val) => {
                     'border border-gray-100 rounded-xl bg-white/60 hover:shadow-md transition-all relative',
                     w.type === 'player'
                       ? 'col-span-2 md:col-span-4 flex flex-col gap-3 p-4 md:grid md:grid-cols-[auto_1fr_auto] md:items-center md:gap-4'
-                      : 'flex flex-col items-center justify-between p-4 aspect-square',
+                      : 'flex flex-col items-stretch gap-2 p-3',
                   ]"
                 >
                   <button
@@ -2207,7 +2209,7 @@ watch(activeTab, (val) => {
                   </template>
                   <template v-else>
                     <div
-                      class="flex flex-col items-center gap-2 flex-1 justify-center scale-100 cursor-pointer hover:bg-gray-50 rounded-lg transition-colors w-full"
+                      class="flex flex-col items-center gap-1.5 scale-100 cursor-pointer hover:bg-gray-50 rounded-lg transition-colors w-full py-1"
                       @click="
                         w.type === 'music'
                           ? scrollToMusicSettings()
@@ -2284,7 +2286,7 @@ watch(activeTab, (val) => {
                       </template>
                       <template v-else>
                         <div
-                          class="w-10 h-10 rounded-full bg-gray-50 flex items-center justify-center text-sm font-medium text-gray-700 shadow-sm"
+                          class="w-9 h-9 rounded-full bg-gray-50 flex items-center justify-center text-xs font-medium text-gray-700 shadow-sm"
                         >
                           <img
                             v-if="w.type === 'music'"
@@ -2332,7 +2334,7 @@ watch(activeTab, (val) => {
                           </template>
                         </div>
                         <span
-                          class="font-bold text-gray-700 text-sm leading-snug text-center truncate w-full px-1"
+                          class="font-bold text-gray-700 text-xs leading-snug text-center truncate w-full px-1"
                         >
                           {{
                             w.type === "clock"
@@ -2386,9 +2388,7 @@ watch(activeTab, (val) => {
                         </span>
                       </template>
                     </div>
-                    <div
-                      class="grid grid-cols-3 gap-2 w-full mt-2 md:flex md:items-center md:justify-center md:gap-4"
-                    >
+                    <div class="grid grid-cols-3 gap-1.5 w-full mt-1">
                       <div class="flex flex-col items-center gap-0.5">
                         <span class="text-[10px] text-gray-400 scale-90">公开</span>
                         <label class="relative inline-flex items-center cursor-pointer" title="公开"
@@ -2612,7 +2612,7 @@ watch(activeTab, (val) => {
 
               <div class="flex flex-wrap items-center gap-4 border-t border-gray-100 pt-3">
                 <div class="flex items-center gap-2">
-                  <span class="text-xs text-gray-500">支持启动/停止/重启</span>
+                  <span class="text-xs text-gray-500">模拟数据启用</span>
                   <label class="relative inline-flex items-center cursor-pointer">
                     <input
                       type="checkbox"
@@ -2624,7 +2624,6 @@ watch(activeTab, (val) => {
                       class="w-9 h-5 bg-gray-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-blue-600"
                     ></div>
                   </label>
-                  <span class="text-[10px] text-gray-500">使用模拟数据</span>
                 </div>
                 <div class="flex items-center gap-2">
                   <span class="text-xs text-gray-500">自动升级镜像(每2小时)</span>

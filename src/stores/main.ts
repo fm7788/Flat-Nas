@@ -125,6 +125,8 @@ export const useMainStore = defineStore("main", () => {
   const isExpandedMode = ref(false);
   const activeMusicPlayer = ref<"mini-player" | "music-widget" | null>(null);
   const webPaginationActiveGroupId = ref("");
+  const isLanModeInited = ref(false);
+  const ipFetchStatus = ref<"success" | "error" | "loading">("loading");
 
   const getHeaders = () => {
     const headers: Record<string, string> = { "Content-Type": "application/json" };
@@ -135,7 +137,7 @@ export const useMainStore = defineStore("main", () => {
   };
 
   // Version Check
-  const currentVersion = "1.0.75";
+  const currentVersion = "1.0.76dev1";
   const latestVersion = ref("");
   const dockerUpdateAvailable = ref(false);
   const updateCheckLastAt = useStorage<number>("flat-nas-update-check-last-at", 0);
@@ -1094,6 +1096,8 @@ export const useMainStore = defineStore("main", () => {
     isExpandedMode,
     activeMusicPlayer,
     webPaginationActiveGroupId,
+    isLanModeInited,
+    ipFetchStatus,
     rssFeeds,
     rssCategories,
     init,
