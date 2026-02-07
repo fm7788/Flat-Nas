@@ -2829,10 +2829,13 @@ watch(activeTab, (val) => {
                       <label class="block text-xs font-bold text-gray-600"
                         >外网/默认地址 (URL)</label
                       >
-                      <ProxyToggle
-                        v-model="w.data.useProxy"
-                        @update:model-value="store.saveData()"
-                      />
+                      <!-- 隐藏代理开关，通过 F12 去掉 style="display: none" 可显示 -->
+                      <div style="display: none">
+                        <ProxyToggle
+                          v-model="w.data.useProxy"
+                          @update:model-value="store.saveData()"
+                        />
+                      </div>
                     </div>
                     <div class="flex gap-2">
                       <input

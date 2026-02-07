@@ -195,7 +195,10 @@ const toggleProxy = (item: CustomScript) => {
 
             <div class="flex items-center gap-2" @click.stop>
               <!-- Proxy Switch -->
-              <label class="relative inline-flex items-center cursor-pointer mr-1" title="启用代理">
+              <label
+                class="relative inline-flex items-center cursor-pointer mr-1"
+                title="通过本地网络"
+              >
                 <input
                   type="checkbox"
                   :checked="!!element.useProxy"
@@ -205,7 +208,7 @@ const toggleProxy = (item: CustomScript) => {
                 <div
                   class="w-7 h-4 bg-gray-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-3 after:w-3 after:transition-all peer-checked:bg-purple-500"
                 ></div>
-                <span class="ml-1 text-xs text-gray-500 font-medium">代理</span>
+                <span class="ml-1 text-xs text-gray-500 font-medium">通过本地网络</span>
               </label>
 
               <!-- Enable Switch -->
