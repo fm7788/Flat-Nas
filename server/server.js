@@ -22,6 +22,9 @@ import multer from "multer";
 import Docker from "dockerode";
 import si from "systeminformation";
 import { runAutoUpdateTick } from "./dockerAutoUpdate.js";
+import axios from "axios";
+import { HttpsProxyAgent } from "https-proxy-agent";
+import { SocksProxyAgent } from "socks-proxy-agent";
 
 // --- Security Utils ---
 // const isPrivateIp = (ip) => {
@@ -1243,7 +1246,14 @@ app.get("/api/docker/containers", authenticateToken, async (req, res) => {
   startStatsCollector();
 
   try {
-    const containers = await docker.listContainers({ all: true });
+    // Wrap listContainers with a timeout (8s) to prevent hanging if Docker pipe is unresponsive
+    // Frontend has a 10s timeout, so we must respond before that.
+    const listPromise = docker.listContainers({ all: true });
+    const timeoutPromise = new Promise((_, reject) =>
+      setTimeout(() => reject(new Error("Docker list timeout")), 8000),
+    );
+
+    const containers = await Promise.race([listPromise, timeoutPromise]);
 
     // Enrich containers with stats from cache
     const enriched = containers.map((c) => {
@@ -4324,6 +4334,102 @@ app.get("/api/rss/parse", async (req, res) => {
     }
 
     res.status(500).json({ error: "Failed to parse RSS feed" });
+  }
+});
+
+// --- Proxy Support ---
+app.get("/api/config/proxy-status", (req, res) => {
+  const proxyUrl = process.env.PROXY_URL;
+  if (!proxyUrl || proxyUrl.trim() === "") {
+    return res.json({ available: false });
+  }
+
+  try {
+    const u = new URL(proxyUrl);
+    if (["http:", "https:", "socks5:", "socks5h:"].includes(u.protocol)) {
+      return res.json({ available: true });
+    }
+  } catch {}
+
+  res.json({ available: false });
+});
+
+app.get("/proxy", async (req, res) => {
+  const proxyUrl = process.env.PROXY_URL;
+  if (!proxyUrl || proxyUrl.trim() === "") {
+    return res.status(503).json({ error: "Proxy not configured on server" });
+  }
+
+  const targetUrl = req.query.url;
+  if (!targetUrl) {
+    return res.status(400).json({ error: "Missing 'url' query parameter" });
+  }
+
+  // SSRF Check
+  if (!safeUrlCheck(targetUrl)) {
+    return res.status(403).json({ error: "Forbidden: Invalid target URL (SSRF protection)" });
+  }
+
+  try {
+    let agent;
+    const pUrl = new URL(proxyUrl);
+
+    if (pUrl.protocol.startsWith("socks")) {
+      agent = new SocksProxyAgent(proxyUrl);
+    } else {
+      agent = new HttpsProxyAgent(proxyUrl);
+    }
+
+    const response = await axios({
+      method: "get",
+      url: targetUrl,
+      httpsAgent: agent,
+      httpAgent: agent, // For http targets via http proxy
+      validateStatus: () => true, // Forward all status codes
+      responseType: "stream",
+      headers: {
+        "User-Agent": req.headers["user-agent"] || "FlatNas-Proxy/1.0",
+      },
+    });
+
+    // Forward status
+    res.status(response.status);
+
+    // Forward headers (selectively)
+    Object.keys(response.headers).forEach((key) => {
+      const lowerKey = key.toLowerCase();
+      // Skip headers that cause issues or block iframe embedding
+      if (
+        [
+          "content-length",
+          "connection",
+          "host",
+          "x-frame-options",
+          "content-security-policy",
+          "content-security-policy-report-only",
+          "x-content-security-policy",
+          "x-webkit-csp",
+          "frame-options",
+          "cross-origin-resource-policy",
+          "cross-origin-embedder-policy",
+          "cross-origin-opener-policy",
+        ].includes(lowerKey)
+      )
+        return;
+      res.setHeader(key, response.headers[key]);
+    });
+
+    // Mark as proxied
+    res.setHeader("X-Proxy-Enabled", "true");
+
+    response.data.pipe(res);
+  } catch (err) {
+    console.error("[Proxy Error]", err.message);
+    if (err.response) {
+      res.status(err.response.status).send(err.response.data);
+    } else {
+      res.status(502).json({ error: "Bad Gateway: " + err.message });
+    }
   }
 });
 

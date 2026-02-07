@@ -7,6 +7,7 @@ import IconUploader from "./IconUploader.vue";
 import WallpaperLibrary from "./WallpaperLibrary.vue";
 import PasswordConfirmModal from "./PasswordConfirmModal.vue";
 import DockerWidget from "./DockerWidget.vue";
+import ProxyToggle from "./ProxyToggle.vue";
 import SystemStatusWidget from "./SystemStatusWidget.vue";
 import RssSettings from "./RssSettings.vue";
 import SearchSettings from "./SearchSettings.vue";
@@ -2824,9 +2825,15 @@ watch(activeTab, (val) => {
                 </div>
                 <div class="w-full bg-white/60 p-3 rounded-lg border border-gray-100 space-y-3">
                   <div>
-                    <label class="block text-xs font-bold text-gray-600 mb-1"
-                      >外网/默认地址 (URL)</label
-                    >
+                    <div class="flex justify-between items-center mb-1">
+                      <label class="block text-xs font-bold text-gray-600"
+                        >外网/默认地址 (URL)</label
+                      >
+                      <ProxyToggle
+                        v-model="w.data.useProxy"
+                        @update:model-value="store.saveData()"
+                      />
+                    </div>
                     <div class="flex gap-2">
                       <input
                         :value="tempInputs[`${w.id}-url`] ?? w.data.url"

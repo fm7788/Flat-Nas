@@ -260,21 +260,56 @@ deploy_app() {
 
     # Install project dependencies
     log "Installing npm dependencies..."
-    npm install --no-audit --no-fund
+    if [ -f "package-lock.json" ]; then
+        npm ci --no-audit --no-fund
+    else
+        npm install --no-audit --no-fund
+    fi
 
     # Build Frontend
     log "Building frontend..."
-    if [ ! -d "dist" ] || [ ! -f "dist/index.html" ]; then
-        NODE_OPTIONS="--max-old-space-size=1024" npm run build-only
-    else
-        log "Frontend build already exists, skipping..."
-    fi
+    NODE_OPTIONS="--max-old-space-size=1024" npm run build
 
     # Prepare backend directories
     log "Preparing backend directories..."
     mkdir -p server/data server/doc server/music server/PC server/APP server/cgi-bin
 
     # Set permissions for CGI scripts
+    log "Setting permissions for CGI scripts..."
+    if [ -d "server/cgi-bin" ]; then
+        chmod +x server/cgi-bin/* 2>/dev/null || true
+    fi
+}
+
+deploy_app_local() {
+    log "Deploying local code in ${APP_DIR} (no git pull/reset)..."
+
+    if [ ! -d "$APP_DIR" ]; then
+        error "Application directory not found: ${APP_DIR}. Please run install first."
+    fi
+
+    cd "$APP_DIR" || error "Failed to enter directory ${APP_DIR}"
+
+    export NPM_CONFIG_REGISTRY="${NPM_CONFIG_REGISTRY:-https://registry.npmmirror.com}"
+    export npm_config_audit=false
+    export npm_config_fund=false
+    export npm_config_progress=false
+    export npm_config_loglevel=error
+    export npm_config_jobs=1
+
+    log "Installing npm dependencies..."
+    if [ -f "package-lock.json" ]; then
+        npm ci --no-audit --no-fund
+    else
+        npm install --no-audit --no-fund
+    fi
+
+    log "Building frontend..."
+    NODE_OPTIONS="--max-old-space-size=1024" npm run build
+
+    log "Preparing backend directories..."
+    mkdir -p server/data server/doc server/music server/PC server/APP server/cgi-bin
+
     log "Setting permissions for CGI scripts..."
     if [ -d "server/cgi-bin" ]; then
         chmod +x server/cgi-bin/* 2>/dev/null || true
@@ -325,10 +360,23 @@ server {
 
     root ${APP_DIR}/dist;
     index index.html;
+    client_max_body_size 0;
 
     # Frontend
     location / {
         try_files \$uri \$uri/ /index.html;
+    }
+
+    location /socket.io/ {
+        proxy_pass http://localhost:3000/socket.io/;
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade \$http_upgrade;
+        proxy_set_header Connection 'upgrade';
+        proxy_set_header Host \$host;
+        proxy_cache_bypass \$http_upgrade;
+        proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
+        proxy_set_header X-Real-IP \$remote_addr;
+        proxy_set_header X-Forwarded-Proto \$scheme;
     }
 
     # Backend API
@@ -341,24 +389,28 @@ server {
         proxy_cache_bypass \$http_upgrade;
         proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
         proxy_set_header X-Real-IP \$remote_addr;
+        proxy_set_header X-Forwarded-Proto \$scheme;
     }
     
     # Music
     location /music/ {
         proxy_pass http://localhost:3000/music/;
         proxy_set_header Host \$host;
+        proxy_set_header X-Forwarded-Proto \$scheme;
     }
 
     # PC Wallpapers
     location /backgrounds/ {
         proxy_pass http://localhost:3000/backgrounds/;
         proxy_set_header Host \$host;
+        proxy_set_header X-Forwarded-Proto \$scheme;
     }
 
     # Mobile Wallpapers
     location /mobile_backgrounds/ {
         proxy_pass http://localhost:3000/mobile_backgrounds/;
         proxy_set_header Host \$host;
+        proxy_set_header X-Forwarded-Proto \$scheme;
     }
     
     # CGI
@@ -366,6 +418,7 @@ server {
         proxy_pass http://localhost:3000;
         proxy_set_header Host \$host;
         proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto \$scheme;
     }
 }
 EOF
@@ -495,6 +548,7 @@ show_help() {
     echo "Options:"
     echo "  install    - Full installation and deployment"
     echo "  update     - Pull latest code and rebuild"
+    echo "  rebuild    - Rebuild and restart using local code (no git pull/reset)"
     echo "  uninstall  - Remove FlatNas service and files"
     echo "  config     - Show current deployment config and login entry"
     echo "  help       - Show this help message"
@@ -535,29 +589,27 @@ do_update() {
     log "Update Complete!"
 }
 
-if [ -n "$1" ]; then
-    case "$1" in
-        install)
-            do_install
-            ;;
-        update)
-            do_update
-            ;;
-        uninstall)
-            check_system
-            uninstall_app
-            ;;
-        config)
-            view_config
-            ;;
-        *)
-            show_help
-            ;;
-    esac
-else
-    # Interactive Menu
-    while true; do
+do_rebuild() {
+    check_system
+    deploy_app_local
+    setup_service
+    setup_nginx
+    log "Rebuild Complete!"
+}
+
+is_tty() {
+    [ -t 0 ] && [ -t 1 ]
+}
+
+maybe_clear() {
+    if is_tty && command -v clear >/dev/null 2>&1; then
         clear
+    fi
+}
+
+show_menu() {
+    while true; do
+        maybe_clear
         echo -e "${GREEN}=============================================${NC}"
         echo -e "${GREEN}      FlatNas 一键部署（交互式）            ${NC}"
         echo -e "${GREEN}=============================================${NC}"
@@ -565,9 +617,10 @@ else
         echo "2. 更新（保留数据）"
         echo "3. 卸载"
         echo "4. 查看配置（含登录入口）"
+        echo "5. 本地重建（不拉取代码）"
         echo "0. 退出"
         echo -e "${GREEN}=============================================${NC}"
-        read -p "请输入选项 [0-4]: " choice
+        read -p "请输入选项 [0-5]: " choice
 
         case $choice in
             1)
@@ -587,6 +640,10 @@ else
                 view_config
                 read -p "按回车返回菜单..." _
                 ;;
+            5)
+                do_rebuild
+                read -p "按回车返回菜单..." _
+                ;;
             0)
                 exit 0
                 ;;
@@ -596,4 +653,81 @@ else
                 ;;
         esac
     done
+}
+
+action_confirm_or_menu() {
+    local action="$1"
+    if ! is_tty; then
+        return 0
+    fi
+    if [ "${FLATNAS_DEPLOY_YES:-0}" = "1" ] || [ "${FLATNAS_DEPLOY_YES:-}" = "true" ]; then
+        return 0
+    fi
+    echo -e "${YELLOW}即将执行：${action}${NC}"
+    echo -e "${YELLOW}如需跳过确认可使用：FLATNAS_DEPLOY_YES=1 或追加参数 --yes${NC}"
+    read -r -p "确认继续？[y/N] " ans
+    if [[ "$ans" =~ ^[Yy]$ ]]; then
+        return 0
+    fi
+    show_menu
+    exit 0
+}
+
+ACTION="${1:-}"
+shift 1 2>/dev/null || true
+
+AUTO_YES=0
+FORCE_MENU=0
+for arg in "$@"; do
+    case "$arg" in
+        --yes|-y)
+            AUTO_YES=1
+            ;;
+        --menu)
+            FORCE_MENU=1
+            ;;
+    esac
+done
+
+if [ "${AUTO_YES}" = "1" ]; then
+    export FLATNAS_DEPLOY_YES=1
 fi
+
+if [ -z "${ACTION}" ] || [ "${FORCE_MENU}" = "1" ]; then
+    if is_tty; then
+        show_menu
+        exit 0
+    fi
+    show_help
+    exit 1
+fi
+
+case "${ACTION}" in
+    install)
+        action_confirm_or_menu "install（安装/重新部署）"
+        do_install
+        ;;
+    update)
+        action_confirm_or_menu "update（更新并重建，保留数据）"
+        do_update
+        ;;
+    rebuild)
+        action_confirm_or_menu "rebuild（本地重建，不拉取代码）"
+        do_rebuild
+        ;;
+    uninstall)
+        action_confirm_or_menu "uninstall（卸载服务/可选删除数据）"
+        check_system
+        uninstall_app
+        ;;
+    config)
+        view_config
+        ;;
+    help|-h|--help)
+        show_help
+        ;;
+    *)
+        show_help
+        exit 1
+        ;;
+esac

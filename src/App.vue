@@ -2,6 +2,7 @@
 import { onMounted, watch, computed } from "vue";
 import GridPanel from "./components/GridPanel.vue";
 import { useMainStore } from "./stores/main";
+import type { CustomScript } from "@/types";
 import { useWindowScroll, useWindowSize } from "@vueuse/core";
 
 const store = useMainStore();
@@ -106,7 +107,7 @@ type CustomCtx = {
 };
 
 const customJsRuntime = (() => {
-  const scriptId = "custom-js-injection";
+  const scriptClass = "custom-js-injected";
   const cleanupFns: Array<() => void> = [];
   let hooks: CustomHooks | null = null;
   let observer: MutationObserver | null = null;
@@ -147,9 +148,8 @@ const customJsRuntime = (() => {
     },
   };
 
-  const removeScript = () => {
-    const existing = document.getElementById(scriptId);
-    if (existing) existing.remove();
+  const removeScripts = () => {
+    document.querySelectorAll(`.${scriptClass}`).forEach((el) => el.remove());
   };
 
   const doDestroy = async () => {
@@ -168,7 +168,7 @@ const customJsRuntime = (() => {
         fn?.();
       } catch {}
     }
-    removeScript();
+    removeScripts();
   };
 
   const scheduleUpdate = () => {
@@ -218,7 +218,7 @@ const customJsRuntime = (() => {
     scheduleUpdate();
   };
 
-  const apply = async (code: string, agreed: boolean) => {
+  const apply = async (input: string | CustomScript[], agreed: boolean) => {
     currentNonce++;
     const nonce = currentNonce;
     await doDestroy();
@@ -227,30 +227,63 @@ const customJsRuntime = (() => {
 
     (window as unknown as Record<string, unknown>).FlatNasCustomCtx = ctx;
 
-    const src = String(code || "").trim();
-    if (!agreed || !src) return;
+    if (!agreed) return;
 
-    const looksModule =
-      /^\s*\/\/\s*@module\b/m.test(src) ||
-      /(^|\n)\s*import\s.+from\s+["'][^"']+["']/m.test(src) ||
-      /(^|\n)\s*export\s+/m.test(src);
-
-    const script = document.createElement("script");
-    script.id = scriptId;
-    if (looksModule) script.type = "module";
-
-    const suffix = "\n;globalThis.FlatNasCustomRegister?.(globalThis.FlatNasCustom);";
-    if (looksModule) {
-      script.textContent = `${src}${suffix}`;
+    let scripts: CustomScript[] = [];
+    if (Array.isArray(input)) {
+      scripts = input.filter((s) => s.enable && s.content.trim());
     } else {
-      const needsWrapper = /(^|[^\w$])await\b/.test(src);
-      if (needsWrapper) {
-        const wrapped = `;(async () => {\ntry {\n${src}\n} catch (e) {\nconsole.error('Custom JS execution failed:', e);\n}\n})();`;
-        script.textContent = `${wrapped}${suffix}`;
-      } else {
+      const s = String(input || "").trim();
+      if (s) scripts.push({ id: "legacy", name: "Legacy Script", content: s, enable: true });
+    }
+
+    if (scripts.length === 0) return;
+
+    scripts.forEach((item) => {
+      const src = item.content;
+      const looksModule =
+        /^\s*\/\/\s*@module\b/m.test(src) ||
+        /(^|\n)\s*import\s.+from\s+["'][^"']+["']/m.test(src) ||
+        /(^|\n)\s*export\s+/m.test(src);
+
+      const script = document.createElement("script");
+      script.className = scriptClass;
+      if (looksModule) script.type = "module";
+
+      const suffix = "\n;globalThis.FlatNasCustomRegister?.(globalThis.FlatNasCustom);";
+
+      if (looksModule) {
         script.textContent = `${src}${suffix}`;
+      } else {
+        // Proxy wrapper
+        let proxyCode = "";
+        if (item.useProxy) {
+          proxyCode = `
+const originalFetch = window.fetch;
+const fetch = async (input, init) => {
+  try {
+    if (typeof input === 'string' && input.startsWith('http')) {
+      const url = new URL(input);
+      if (url.hostname !== window.location.hostname) {
+        const target = '/proxy?url=' + encodeURIComponent(input);
+        return await originalFetch(target, init);
       }
     }
+  } catch (e) {}
+  return originalFetch(input, init);
+};`;
+        }
+
+        const wrapped = `;(async () => {\n${proxyCode}\ntry {\n${src}\n} catch (e) {\nconsole.error('Custom JS execution failed (${item.name}):', e);\n}\n})();`;
+        script.textContent = `${wrapped}${suffix}`;
+      }
+
+      script.onerror = (e) => {
+        console.error(`Custom JS script failed (${item.name}):`, e);
+      };
+
+      document.body.appendChild(script);
+    });
 
     const adoptFromWindow = () => {
       const w = window as unknown as Record<string, unknown>;
@@ -261,12 +294,6 @@ const customJsRuntime = (() => {
       void adoptHooks(next);
     };
 
-    script.onload = adoptFromWindow;
-    script.onerror = (e) => {
-      console.error("Custom JS script failed:", e);
-    };
-
-    document.body.appendChild(script);
     window.setTimeout(adoptFromWindow, 0);
   };
 
@@ -274,9 +301,17 @@ const customJsRuntime = (() => {
 })();
 
 watch(
-  [() => store.appConfig.customJs, () => store.appConfig.customJsDisclaimerAgreed],
-  ([newJs, agreed]) => {
-    void customJsRuntime.apply(String(newJs || ""), Boolean(agreed));
+  [
+    () => store.appConfig.customJs,
+    () => store.appConfig.customJsList,
+    () => store.appConfig.customJsDisclaimerAgreed,
+  ],
+  ([newJs, newList, agreed]) => {
+    if (newList && newList.length > 0) {
+      void customJsRuntime.apply(newList, Boolean(agreed));
+    } else {
+      void customJsRuntime.apply(String(newJs || ""), Boolean(agreed));
+    }
   },
   { immediate: true },
 );
@@ -295,9 +330,12 @@ onMounted(() => {
   document.head.appendChild(style);
 
   // Poll for updates every 18 hours
-  setInterval(() => {
-    store.fetchData();
-  }, 18 * 60 * 60 * 1000);
+  setInterval(
+    () => {
+      store.fetchData();
+    },
+    18 * 60 * 60 * 1000,
+  );
 });
 </script>
 

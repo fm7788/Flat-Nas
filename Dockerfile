@@ -48,8 +48,11 @@ RUN npm install --omit=dev
 # 4. 拷贝文件
 COPY server/ ./server/
 COPY --from=builder /app/dist ./dist
+COPY entrypoint.sh ./entrypoint.sh
 
 # 5. 权限与启动
 RUN chmod +x ./server/cgi-bin/*
+RUN chmod +x ./entrypoint.sh
 EXPOSE 3000
+ENTRYPOINT ["./entrypoint.sh"]
 CMD ["node", "server/server.js"]

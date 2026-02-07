@@ -118,6 +118,11 @@ const toggleEnable = (item: CustomScript) => {
   item.enable = !item.enable;
   updateList();
 };
+
+const toggleProxy = (item: CustomScript) => {
+  item.useProxy = !item.useProxy;
+  updateList();
+};
 </script>
 
 <template>
@@ -189,6 +194,20 @@ const toggleEnable = (item: CustomScript) => {
             </div>
 
             <div class="flex items-center gap-2" @click.stop>
+              <!-- Proxy Switch -->
+              <label class="relative inline-flex items-center cursor-pointer mr-1" title="启用代理">
+                <input
+                  type="checkbox"
+                  :checked="!!element.useProxy"
+                  @change="toggleProxy(element)"
+                  class="sr-only peer"
+                />
+                <div
+                  class="w-7 h-4 bg-gray-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-3 after:w-3 after:transition-all peer-checked:bg-purple-500"
+                ></div>
+                <span class="ml-1 text-xs text-gray-500 font-medium">代理</span>
+              </label>
+
               <!-- Enable Switch -->
               <label class="relative inline-flex items-center cursor-pointer">
                 <input

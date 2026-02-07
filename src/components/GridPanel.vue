@@ -888,35 +888,14 @@ const handleCardClick = (item: NavItem) => {
   // 1. 默认使用外网链接 (item.url)
   // 2. 只有在【已登录】且【处于内网环境】且【配置了内网链接】时，才优先使用内网链接
   // 3. 支持强制切换模式
+  // 4. 修复：统一使用 effectiveIsLan 判断，确保 UI 显示与跳转行为一致
 
   let targetUrl = item.url;
 
-  if (forceMode.value === "lan") {
-    // 强制内网模式：优先使用内网链接
-    if (item.lanUrl) targetUrl = item.lanUrl;
-  } else if (forceMode.value === "wan") {
-    // 强制外网模式：只使用外网链接
-    targetUrl = item.url;
-  } else if (forceMode.value === "latency") {
-    if (store.isLogged && isLanMode.value && item.lanUrl) {
-      targetUrl = item.lanUrl;
-    } else {
-      const rtt = latency.value;
-      if (rtt > 0) {
-        if (store.isLogged && rtt < latencyThresholdMs.value && item.lanUrl) {
-          targetUrl = item.lanUrl;
-        }
-      } else {
-        if (store.isLogged && isLanMode.value && item.lanUrl) {
-          targetUrl = item.lanUrl;
-        }
-      }
-    }
-  } else {
-    // 自动模式
-    if (store.isLogged && isLanMode.value && item.lanUrl) {
-      targetUrl = item.lanUrl;
-    }
+  // effectiveIsLan 已经封装了 forceMode (LAN/WAN/Latency/Auto) 的所有判断逻辑
+  // 直接使用它可以保证 UI 状态（是否显示内网标识）与实际跳转逻辑的一致性
+  if (store.isLogged && effectiveIsLan.value && item.lanUrl) {
+    targetUrl = item.lanUrl;
   }
 
   // 特殊情况：如果解析出的 targetUrl 为空（说明没有外网链接），

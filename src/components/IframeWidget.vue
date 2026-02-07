@@ -51,7 +51,11 @@ const currentUrl = computed(() => {
   if (isBlocked.value) {
     return "";
   }
-  return rawTargetUrl.value;
+  const url = rawTargetUrl.value;
+  if (props.widget.data?.useProxy && url) {
+    return `/proxy?url=${encodeURIComponent(url)}`;
+  }
+  return url;
 });
 
 const scaleStyle = computed(() => {

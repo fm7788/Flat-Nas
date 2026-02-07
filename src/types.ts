@@ -66,6 +66,7 @@ export interface CustomScript {
   name: string;
   content: string;
   enable: boolean;
+  useProxy?: boolean;
 }
 
 export interface SearchEngine {

@@ -7,6 +7,9 @@ services:
     restart: unless-stopped
     ports:
       - "23000:3000"
+    environment:
+      - SECRET_KEY=your-secret-key-here
+      # - PROXY_URL=http://user:pass@proxy-host:port
     volumes:
       - ./data:/app/server/data #指定路径下新建data
       - ./music:/app/server/music #映射播放器路径

@@ -137,7 +137,7 @@ export const useMainStore = defineStore("main", () => {
   };
 
   // Version Check
-  const currentVersion = "1.0.76dev1";
+  const currentVersion = "1.0.76dev2";
   const latestVersion = ref("");
   const dockerUpdateAvailable = ref(false);
   const updateCheckLastAt = useStorage<number>("flat-nas-update-check-last-at", 0);
@@ -277,6 +277,7 @@ export const useMainStore = defineStore("main", () => {
     empireMode: false,
     customCss: "",
     customJs: "",
+    customJsList: [],
     customJsDisclaimerAgreed: false,
     mouseHoverEffect: "scale",
     latencyThresholdMs: 200,
