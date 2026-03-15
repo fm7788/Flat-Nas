@@ -22,7 +22,7 @@ import DOMPurify from "dompurify";
 const EditModal = defineAsyncComponent(() => import("./EditModal.vue"));
 const SettingsModal = defineAsyncComponent(() => import("./SettingsModal.vue"));
 const GroupSettingsModal = defineAsyncComponent(() => import("./GroupSettingsModal.vue"));
-const LoginModal = defineAsyncComponent(() => import("./LoginModal.vue"));
+import LoginModal from "./LoginModal.vue";
 const BookmarkWidget = defineAsyncComponent(() => import("./BookmarkWidget.vue"));
 const MemoWidget = defineAsyncComponent(() => import("./MemoWidget.vue"));
 const TodoWidget = defineAsyncComponent(() => import("./TodoWidget.vue"));
