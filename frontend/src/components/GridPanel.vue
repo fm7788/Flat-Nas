@@ -8,6 +8,8 @@ import {
   nextTick,
   toRef,
   defineAsyncComponent,
+  type Component,
+  type AsyncComponentLoader,
 } from "vue";
 import { VueDraggable } from "vue-draggable-plus";
 import { GridLayout, GridItem } from "grid-layout-plus";
@@ -19,34 +21,63 @@ import { generateLayout, type GridLayoutItem } from "../utils/gridLayout";
 import type { NavItem, WidgetConfig, NavGroup } from "@/types";
 import { isInternalNetwork, getNetworkConfig } from "@/utils/network";
 import DOMPurify from "dompurify";
-const EditModal = defineAsyncComponent(() => import("./EditModal.vue"));
-const SettingsModal = defineAsyncComponent(() => import("./SettingsModal.vue"));
-const GroupSettingsModal = defineAsyncComponent(() => import("./GroupSettingsModal.vue"));
+const CHUNK_RELOAD_KEY = "flatnas:chunk-reload-at";
+const loadAsync = <T extends Component>(loader: AsyncComponentLoader<T>) =>
+  defineAsyncComponent({
+    loader,
+    onError(error, retry, fail, attempts) {
+      const msg = error instanceof Error ? error.message : String(error ?? "");
+      const chunkFailed =
+        /Failed to fetch dynamically imported module/i.test(msg) ||
+        /Importing a module script failed/i.test(msg) ||
+        /ChunkLoadError/i.test(msg) ||
+        /Loading chunk [\w-]+ failed/i.test(msg);
+      if (chunkFailed && typeof window !== "undefined") {
+        const last = Number(sessionStorage.getItem(CHUNK_RELOAD_KEY) || "0");
+        const now = Date.now();
+        if (!Number.isFinite(last) || now - last > 30000) {
+          sessionStorage.setItem(CHUNK_RELOAD_KEY, String(now));
+          const url = new URL(window.location.href);
+          url.searchParams.set("_r", String(now));
+          window.location.replace(url.toString());
+          return;
+        }
+      }
+      if (attempts <= 1) {
+        retry();
+      } else {
+        fail();
+      }
+    },
+  });
+const EditModal = loadAsync(() => import("./EditModal.vue"));
+const SettingsModal = loadAsync(() => import("./SettingsModal.vue"));
+const GroupSettingsModal = loadAsync(() => import("./GroupSettingsModal.vue"));
 /** 同步导入，避免生产/Docker 下动态 chunk 请求失败导致登录框无法弹出；LoginModal 内已做 store/authMode 防御 */
 import LoginModal from "./LoginModal.vue";
-const BookmarkWidget = defineAsyncComponent(() => import("./BookmarkWidget.vue"));
-const MemoWidget = defineAsyncComponent(() => import("./MemoWidget.vue"));
-const TodoWidget = defineAsyncComponent(() => import("./TodoWidget.vue"));
-const CalculatorWidget = defineAsyncComponent(() => import("./CalculatorWidget.vue"));
-const MusicWidget = defineAsyncComponent(() => import("./MusicWidget.vue"));
-const MiniPlayer = defineAsyncComponent(() => import("./MiniPlayer.vue"));
-const HotWidget = defineAsyncComponent(() => import("./HotWidget.vue"));
-const ClockWeatherWidget = defineAsyncComponent(() => import("./ClockWeatherWidget.vue"));
-const RssWidget = defineAsyncComponent(() => import("./RssWidget.vue"));
-const IconShape = defineAsyncComponent(() => import("./IconShape.vue"));
-const IframeWidget = defineAsyncComponent(() => import("./IframeWidget.vue"));
-const SimpleWeatherWidget = defineAsyncComponent(() => import("./SimpleWeatherWidget.vue"));
-const CalendarWidget = defineAsyncComponent(() => import("./CalendarWidget.vue"));
-const ClockWidget = defineAsyncComponent(() => import("./ClockWidget.vue"));
-const AppSidebar = defineAsyncComponent(() => import("./AppSidebar.vue"));
-const CountdownWidget = defineAsyncComponent(() => import("./CountdownWidget.vue"));
-const CountUpWidget = defineAsyncComponent(() => import("./CountUpWidget.vue"));
-const DockerWidget = defineAsyncComponent(() => import("./DockerWidget.vue"));
-const SystemStatusWidget = defineAsyncComponent(() => import("./SystemStatusWidget.vue"));
-const CustomCssWidget = defineAsyncComponent(() => import("./CustomCssWidget.vue"));
-const AmapWeatherWidget = defineAsyncComponent(() => import("./AmapWeatherWidget.vue"));
-const FileTransferWidget = defineAsyncComponent(() => import("./FileTransferWidget.vue"));
-const SizeSelector = defineAsyncComponent(() => import("./SizeSelector.vue"));
+const BookmarkWidget = loadAsync(() => import("./BookmarkWidget.vue"));
+const MemoWidget = loadAsync(() => import("./MemoWidget.vue"));
+const TodoWidget = loadAsync(() => import("./TodoWidget.vue"));
+const CalculatorWidget = loadAsync(() => import("./CalculatorWidget.vue"));
+const MusicWidget = loadAsync(() => import("./MusicWidget.vue"));
+const MiniPlayer = loadAsync(() => import("./MiniPlayer.vue"));
+const HotWidget = loadAsync(() => import("./HotWidget.vue"));
+const ClockWeatherWidget = loadAsync(() => import("./ClockWeatherWidget.vue"));
+const RssWidget = loadAsync(() => import("./RssWidget.vue"));
+const IconShape = loadAsync(() => import("./IconShape.vue"));
+const IframeWidget = loadAsync(() => import("./IframeWidget.vue"));
+const SimpleWeatherWidget = loadAsync(() => import("./SimpleWeatherWidget.vue"));
+const CalendarWidget = loadAsync(() => import("./CalendarWidget.vue"));
+const ClockWidget = loadAsync(() => import("./ClockWidget.vue"));
+const AppSidebar = loadAsync(() => import("./AppSidebar.vue"));
+const CountdownWidget = loadAsync(() => import("./CountdownWidget.vue"));
+const CountUpWidget = loadAsync(() => import("./CountUpWidget.vue"));
+const DockerWidget = loadAsync(() => import("./DockerWidget.vue"));
+const SystemStatusWidget = loadAsync(() => import("./SystemStatusWidget.vue"));
+const CustomCssWidget = loadAsync(() => import("./CustomCssWidget.vue"));
+const AmapWeatherWidget = loadAsync(() => import("./AmapWeatherWidget.vue"));
+const FileTransferWidget = loadAsync(() => import("./FileTransferWidget.vue"));
+const SizeSelector = loadAsync(() => import("./SizeSelector.vue"));
 
 const store = useMainStore();
 useWallpaperRotation();
@@ -1955,9 +1986,6 @@ const openSettings = () => {
     showSettingsModal.value = true;
   }
 };
-const openLoginModal = () => {
-  showLoginModal.value = true;
-};
 const openEditOrLogin = () => {
   if (!store.isLogged) {
     showLoginModal.value = true;
@@ -3075,7 +3103,7 @@ onUnmounted(() => {
               v-if="isEditMode && activeResizeWidgetId === widget.id"
               :current-col="widget.w || widget.colSpan || 1"
               :current-row="widget.h || widget.rowSpan || (widget.type === 'bookmarks' ? 2 : 1)"
-              @select="(size) => handleSizeSelect(widget, size)"
+              @select="(size: { colSpan: number; rowSpan: number }) => handleSizeSelect(widget, size)"
             />
             <ClockWidget v-if="widget.type === 'clock'" :widget="widget" />
             <SimpleWeatherWidget v-else-if="widget.type === 'weather'" :widget="widget" />

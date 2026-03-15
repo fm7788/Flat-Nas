@@ -13,10 +13,7 @@ ENV HTTP_PROXY=$HTTP_PROXY \
 WORKDIR /app
 
 # Copy server/public for Vite publicDir (contains static assets like icons)
-# We exclude 'assets' to avoid copying old build artifacts if possible
 COPY server/public ./server/public
-# Clean up old build artifacts
-RUN rm -rf ./server/public/assets
 
 WORKDIR /app/frontend
 
