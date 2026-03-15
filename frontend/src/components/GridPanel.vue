@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import {
   ref,
+  h,
   onMounted,
   onUnmounted,
   computed,
@@ -22,7 +23,28 @@ import DOMPurify from "dompurify";
 const EditModal = defineAsyncComponent(() => import("./EditModal.vue"));
 const SettingsModal = defineAsyncComponent(() => import("./SettingsModal.vue"));
 const GroupSettingsModal = defineAsyncComponent(() => import("./GroupSettingsModal.vue"));
-const LoginModal = defineAsyncComponent(() => import("./LoginModal.vue"));
+const LoginModal = defineAsyncComponent({
+  loader: () => import("./LoginModal.vue"),
+  loadingComponent: {
+    render() {
+      return h(
+        "div",
+        {
+          class:
+            "fixed inset-0 bg-black/40 backdrop-blur-sm z-50 flex items-center justify-center p-4",
+        },
+        h(
+          "div",
+          {
+            class:
+              "bg-white rounded-2xl shadow-2xl w-full max-w-sm overflow-hidden px-6 py-8 text-center text-gray-500",
+          },
+          "加载中…"
+        )
+      );
+    },
+  },
+});
 /** 预加载登录弹窗 chunk，避免点击「登录」时异步加载未完成导致弹窗不出现 */
 const preloadLoginModal = () => void import("./LoginModal.vue");
 const BookmarkWidget = defineAsyncComponent(() => import("./BookmarkWidget.vue"));

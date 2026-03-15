@@ -29,7 +29,7 @@ watch(
       isRegister.value = false;
       nextTick(() => {
         // Focus username input if visible, else password
-        if (store.systemConfig.authMode === "multi") {
+        if (store.systemConfig?.authMode === "multi") {
           const input = document.querySelector('input[placeholder="用户名"]') as HTMLInputElement;
           if (input) input.focus();
           else inputRef.value?.focus();
@@ -45,7 +45,7 @@ const close = () => emit("update:show", false);
 
 const handleSubmit = async () => {
   // If single user mode, username can be empty (defaults to admin on server)
-  if (store.systemConfig.authMode === "multi" && !username.value.trim()) {
+  if (store.systemConfig?.authMode === "multi" && !username.value.trim()) {
     alert("请输入用户名");
     return;
   }
@@ -92,7 +92,7 @@ const handleSubmit = async () => {
             <img src="/ICON.PNG" class="w-6 h-6 object-contain" alt="lock" />
             <span>
               {{
-                store.systemConfig.authMode === "single"
+                store.systemConfig?.authMode === "single"
                   ? "管理员登录"
                   : "用户登录"
               }}
@@ -106,7 +106,7 @@ const handleSubmit = async () => {
 
       <div class="p-6">
         <div class="mb-5 space-y-4">
-          <div v-if="store.systemConfig.authMode === 'multi'">
+          <div v-if="store.systemConfig?.authMode === 'multi'">
             <input
               v-model="username"
               type="text"
@@ -134,7 +134,7 @@ const handleSubmit = async () => {
           {{ isRegister ? "注 册" : "登 录" }}
         </button>
 
-        <div class="mt-4 text-center" v-if="store.systemConfig.authMode === 'multi'">
+        <div class="mt-4 text-center" v-if="store.systemConfig?.authMode === 'multi'">
           <button
             @click="isRegister = !isRegister"
             class="text-sm text-gray-500 hover:text-gray-800 hover:underline transition-colors"
