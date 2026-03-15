@@ -22,7 +22,9 @@ import DOMPurify from "dompurify";
 const EditModal = defineAsyncComponent(() => import("./EditModal.vue"));
 const SettingsModal = defineAsyncComponent(() => import("./SettingsModal.vue"));
 const GroupSettingsModal = defineAsyncComponent(() => import("./GroupSettingsModal.vue"));
-import LoginModal from "./LoginModal.vue";
+const LoginModal = defineAsyncComponent(() => import("./LoginModal.vue"));
+/** 预加载登录弹窗 chunk，避免点击「登录」时异步加载未完成导致弹窗不出现 */
+const preloadLoginModal = () => void import("./LoginModal.vue");
 const BookmarkWidget = defineAsyncComponent(() => import("./BookmarkWidget.vue"));
 const MemoWidget = defineAsyncComponent(() => import("./MemoWidget.vue"));
 const TodoWidget = defineAsyncComponent(() => import("./TodoWidget.vue"));
@@ -1020,6 +1022,7 @@ const sanitizedFooterHtml = computed(() => {
 
 onMounted(() => {
   mainContainerRef.value?.addEventListener("wheel", handleWebPaginationWheel, { passive: false });
+  preloadLoginModal();
 });
 
 onUnmounted(() => {
