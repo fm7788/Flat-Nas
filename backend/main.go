@@ -33,7 +33,7 @@ func debugLog(location, message, hypothesisId string, data map[string]interface{
 		return
 	}
 	payload := map[string]interface{}{
-		"sessionId":     "b0ccc3",
+		"sessionId":     "214d88",
 		"location":     location,
 		"message":       message,
 		"hypothesisId": hypothesisId,
@@ -204,8 +204,19 @@ func main() {
 		}
 
 		// Check if file exists in PublicDir
-		filePath := filepath.Join(config.PublicDir, c.Request.URL.Path)
+		// #region agent log
+		reqPath := c.Request.URL.Path
+		// #endregion
+		filePath := filepath.Join(config.PublicDir, reqPath)
 		info, err := os.Stat(filePath)
+		// #region agent log
+		exists := err == nil && info != nil && !info.IsDir()
+		if reqPath == "/ICON.PNG" || strings.HasPrefix(reqPath, "/assets/") {
+			debugLog("main.go:static middleware", "static_file_check", "H3", map[string]interface{}{
+				"path": reqPath, "resolvedPath": filePath, "exists": exists, "statErr": fmt.Sprintf("%v", err),
+			})
+		}
+		// #endregion
 		if err == nil && !info.IsDir() {
 			c.File(filePath)
 			c.Abort()

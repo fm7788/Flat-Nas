@@ -42,20 +42,14 @@ export const useMainStore = defineStore("main", () => {
   const NETWORK_HEARTBEAT_INTERVAL = 10000;
   const NETWORK_HEARTBEAT_TIMEOUT = 20000;
   const NETWORK_HEARTBEAT_CHECK_INTERVAL = 3000;
-  const NETWORK_POLL_INTERVAL = 30000;
   // 白名单（latency）模式下降低心跳频率，减少请求，仍保证 300ms 内延迟可正常维持
   const NETWORK_HEARTBEAT_INTERVAL_LATENCY = 30000;
   const NETWORK_HEARTBEAT_TIMEOUT_LATENCY = 60000;
   const NETWORK_HEARTBEAT_CHECK_INTERVAL_LATENCY = 10000;
-  const NETWORK_IDLE_BROADCAST_INTERVAL = 30000;
-  const networkSyncMode = ref<"broadcast" | "poll">("broadcast");
   let networkHeartbeatTimer: ReturnType<typeof setInterval> | null = null;
   let networkHeartbeatCheckTimer: ReturnType<typeof setInterval> | null = null;
-  let networkPollTimer: ReturnType<typeof setInterval> | null = null;
-  let networkBroadcastTimer: ReturnType<typeof setTimeout> | null = null;
   let lastNetworkHeartbeatAt = 0;
-  let pendingNetworkMode: string | null = null;
-  let isApplyingNetworkMode = false;
+  let isNetworkSyncActive = true;
   let isApplyingServerData = false;
   const DEFAULT_MARKETPLACE_LIST_URL = "http://qdnas.icu:23111/";
   const LEGACY_DEFAULT_MARKETPLACE_LIST_URL = "https://qdnas.icu:23111/";
@@ -74,7 +68,7 @@ export const useMainStore = defineStore("main", () => {
         hypothesisId: "H1",
         timestamp: Date.now(),
       }),
-    }).catch(() => {});
+    }).catch(() => { });
     // #endregion
     console.log("Socket connected:", socket.id);
     isConnected.value = true;
@@ -128,7 +122,7 @@ export const useMainStore = defineStore("main", () => {
         hypothesisId: "H1",
         timestamp: Date.now(),
       }),
-    }).catch(() => {});
+    }).catch(() => { });
     // #endregion
     console.error("Socket connect error:", err);
   });
@@ -199,6 +193,10 @@ export const useMainStore = defineStore("main", () => {
   const token = ref(localStorage.getItem("flat-nas-token") || "");
   const username = ref(localStorage.getItem("flat-nas-username") || "");
   const isLogged = ref(!!token.value);
+  const forceNetworkMode = useStorage<"auto" | "lan" | "wan" | "latency">(
+    "flatnas-force-network-mode",
+    "auto",
+  );
   const password = ref(""); // Only used for password change, not auth
   const isExpandedMode = ref(false);
   const activeMusicPlayer = ref<"mini-player" | "music-widget" | null>(null);
@@ -216,6 +214,14 @@ export const useMainStore = defineStore("main", () => {
   let weatherStatusDetectInFlight: Promise<"online" | "degraded" | "offline"> | null = null;
   let weatherDegradedUntil = 0;
   const isPageUnloading = ref(false);
+  const serverSyncLockCount = ref(0);
+  const lockServerSync = () => {
+    serverSyncLockCount.value += 1;
+  };
+  const unlockServerSync = () => {
+    serverSyncLockCount.value = Math.max(0, serverSyncLockCount.value - 1);
+  };
+  const isServerSyncLocked = computed(() => serverSyncLockCount.value > 0);
   const globalDrag = ref({
     active: false,
     isFiles: false,
@@ -316,13 +322,6 @@ export const useMainStore = defineStore("main", () => {
     socket.emit("network:heartbeat", { token: t });
   };
 
-  const emitNetworkMode = (mode: string) => {
-    if (!isLogged.value) return;
-    const t = token.value || localStorage.getItem("flat-nas-token");
-    if (!t || !isValidNetworkMode(mode)) return;
-    socket.emit("network:mode", { token: t, mode });
-  };
-
   const resetGlobalDrag = () => {
     globalDrag.value.active = false;
     globalDrag.value.isFiles = false;
@@ -386,79 +385,20 @@ export const useMainStore = defineStore("main", () => {
 
   };
 
-  const scheduleNetworkModeBroadcast = (mode: string) => {
-    if (!isValidNetworkMode(mode)) return;
-    pendingNetworkMode = mode;
-    if (networkSyncMode.value === "broadcast") {
-      if (networkBroadcastTimer) {
-        clearTimeout(networkBroadcastTimer);
-        networkBroadcastTimer = null;
-      }
-      emitNetworkMode(mode);
-      return;
-    }
-    if (networkBroadcastTimer) return;
-    networkBroadcastTimer = setTimeout(() => {
-      networkBroadcastTimer = null;
-      const nextMode = pendingNetworkMode;
-      pendingNetworkMode = null;
-      if (nextMode) emitNetworkMode(nextMode);
-    }, NETWORK_IDLE_BROADCAST_INTERVAL);
-  };
-
-  const applyRemoteNetworkMode = (mode: string) => {
-    if (!isValidNetworkMode(mode)) return;
-    if (appConfig.value.forceNetworkMode === mode) return;
-    isApplyingNetworkMode = true;
-    appConfig.value.forceNetworkMode = mode;
-    Promise.resolve().then(() => {
-      isApplyingNetworkMode = false;
-    });
-  };
-
-  const pollNetworkMode = async () => {
-    try {
-      const headers: Record<string, string> = {};
-      const t = token.value || localStorage.getItem("flat-nas-token");
-      if (t) headers["Authorization"] = `Bearer ${t}`;
-      const res = await fetch(`/api/data`, { headers });
-      if (!res.ok) return;
-      const data = await res.json();
-      const mode = data?.appConfig?.forceNetworkMode;
-      if (typeof mode === "string") {
-        applyRemoteNetworkMode(mode);
-      }
-    } catch (e) {
-      console.error("Network mode poll failed", e);
-    }
-  };
-
   /** 心跳曾断开（超时切到 poll）；再次被激活时若版本不同则提示是否同步 */
   let heartbeatLostSinceLastVisible = false;
   const updateNetworkSyncMode = (active: boolean) => {
-    const nextMode = active ? "broadcast" : "poll";
-    if (nextMode === networkSyncMode.value) return;
-    networkSyncMode.value = nextMode;
-    if (nextMode === "broadcast") {
-      if (networkPollTimer) {
-        clearInterval(networkPollTimer);
-        networkPollTimer = null;
-      }
-      return;
-    }
+    if (isNetworkSyncActive === active) return;
+    isNetworkSyncActive = active;
     heartbeatLostSinceLastVisible = true;
-    if (!networkPollTimer) {
-      networkPollTimer = setInterval(pollNetworkMode, NETWORK_POLL_INTERVAL);
-    }
-    pollNetworkMode();
   };
 
   const getHeartbeatInterval = () =>
-    appConfig.value.forceNetworkMode === "latency" ? NETWORK_HEARTBEAT_INTERVAL_LATENCY : NETWORK_HEARTBEAT_INTERVAL;
+    forceNetworkMode.value === "latency" ? NETWORK_HEARTBEAT_INTERVAL_LATENCY : NETWORK_HEARTBEAT_INTERVAL;
   const getHeartbeatTimeout = () =>
-    appConfig.value.forceNetworkMode === "latency" ? NETWORK_HEARTBEAT_TIMEOUT_LATENCY : NETWORK_HEARTBEAT_TIMEOUT;
+    forceNetworkMode.value === "latency" ? NETWORK_HEARTBEAT_TIMEOUT_LATENCY : NETWORK_HEARTBEAT_TIMEOUT;
   const getHeartbeatCheckInterval = () =>
-    appConfig.value.forceNetworkMode === "latency" ? NETWORK_HEARTBEAT_CHECK_INTERVAL_LATENCY : NETWORK_HEARTBEAT_CHECK_INTERVAL;
+    forceNetworkMode.value === "latency" ? NETWORK_HEARTBEAT_CHECK_INTERVAL_LATENCY : NETWORK_HEARTBEAT_CHECK_INTERVAL;
 
   const startNetworkHeartbeat = () => {
     if (networkHeartbeatTimer) clearInterval(networkHeartbeatTimer);
@@ -526,7 +466,7 @@ export const useMainStore = defineStore("main", () => {
   }
 
   // Version Check
-  const currentVersion = "1.1.5dev1";
+  const currentVersion = "1.1.5dev2";
   const latestVersion = ref("");
   const dockerUpdateAvailable = ref(false);
   const updateCheckLastAt = useStorage<number>("flat-nas-update-check-last-at", 0);
@@ -1007,7 +947,6 @@ export const useMainStore = defineStore("main", () => {
     mouseHoverEffect: "scale",
     autoUltrawide: false,
     marketplaceListUrl: DEFAULT_MARKETPLACE_LIST_URL,
-    forceNetworkMode: "auto",
     networkRules: "",
     networkPresets: {
       tailscale: false,
@@ -1020,6 +959,12 @@ export const useMainStore = defineStore("main", () => {
   });
 
   const CACHE_KEY = "flat-nas-data-cache";
+  const stripForceNetworkMode = <T extends Record<string, unknown> | undefined>(config: T) => {
+    if (!config) return config;
+    const next = { ...config };
+    delete (next as { forceNetworkMode?: unknown }).forceNetworkMode;
+    return next;
+  };
   const normalizeVersion = (value: unknown) => {
     if (typeof value === "number" && Number.isFinite(value)) {
       return Math.max(0, Math.floor(value));
@@ -1047,7 +992,7 @@ export const useMainStore = defineStore("main", () => {
       const cacheData = {
         groups: data.groups,
         widgets: cacheWidgets,
-        appConfig: data.appConfig,
+        appConfig: stripForceNetworkMode((data.appConfig || undefined) as Record<string, unknown> | undefined),
         rssFeeds: data.rssFeeds,
         rssCategories: data.rssCategories,
         username: data.username || username.value,
@@ -1077,7 +1022,10 @@ export const useMainStore = defineStore("main", () => {
       if (cache.widgets) {
         applyServerWidgets(normalizeIncomingWidgets(cache.widgets as WidgetConfig[]));
       }
-      if (cache.appConfig) appConfig.value = { ...appConfig.value, ...cache.appConfig };
+      if (cache.appConfig) {
+        appConfig.value = { ...appConfig.value, ...cache.appConfig };
+        delete appConfig.value.forceNetworkMode;
+      }
       if (
         !appConfig.value.marketplaceListUrl ||
         appConfig.value.marketplaceListUrl === DEV_MARKETPLACE_LIST_URL ||
@@ -1167,7 +1115,10 @@ export const useMainStore = defineStore("main", () => {
     applyServerWidgets(normalizedWidgets);
     const tWidgets = performance.now();
 
-    if (data.appConfig) appConfig.value = { ...appConfig.value, ...data.appConfig };
+    if (data.appConfig) {
+      appConfig.value = { ...appConfig.value, ...data.appConfig };
+      delete appConfig.value.forceNetworkMode;
+    }
     if (
       !appConfig.value.marketplaceListUrl ||
       appConfig.value.marketplaceListUrl === DEV_MARKETPLACE_LIST_URL ||
@@ -1318,6 +1269,10 @@ export const useMainStore = defineStore("main", () => {
       if (!res.ok) return;
       const data = await res.json();
 
+      if (isServerSyncLocked.value && hasUnsavedChanges.value) {
+        return;
+      }
+
       // Double check if user has started editing while we were fetching
       if (saveTimer !== null || isSaving.value) {
         return;
@@ -1428,7 +1383,7 @@ export const useMainStore = defineStore("main", () => {
         hypothesisId: "H5",
         timestamp: Date.now(),
       }),
-    }).catch(() => {});
+    }).catch(() => { });
     // #endregion
 
     hasServerSnapshot.value = false;
@@ -1500,7 +1455,7 @@ export const useMainStore = defineStore("main", () => {
           hypothesisId: "H5",
           timestamp: Date.now(),
         }),
-      }).catch(() => {});
+      }).catch(() => { });
       // #endregion
       isInitializing = false;
       if (!socketListenersBound) {
@@ -1568,17 +1523,6 @@ export const useMainStore = defineStore("main", () => {
         socket.on("network:heartbeat", () => {
           lastNetworkHeartbeatAt = Date.now();
           updateNetworkSyncMode(true);
-        });
-        socket.on("network:mode", ({ mode, username: updatedUser }: { mode: string; username: string }) => {
-          if (!mode) return;
-          if (
-            updatedUser &&
-            updatedUser !== username.value &&
-            !(username.value === "admin" && updatedUser === "admin")
-          ) {
-            return;
-          }
-          applyRemoteNetworkMode(mode);
         });
         socket.on("connect", () => {
           if (!isInitializing) {
@@ -1731,7 +1675,7 @@ export const useMainStore = defineStore("main", () => {
         const body: Record<string, unknown> = {
           groups: groups.value,
           widgets: widgets.value.map((widget) => stripWidgetUiState(widget)),
-          appConfig: appConfig.value,
+          appConfig: stripForceNetworkMode(appConfig.value as unknown as Record<string, unknown>),
           rssFeeds: rssFeeds.value,
           rssCategories: rssCategories.value,
           version: dataVersion.value,
@@ -1861,8 +1805,8 @@ export const useMainStore = defineStore("main", () => {
 
                 // 3. Check AppConfig
                 // We need to be careful about local-only fields if any, but usually appConfig is fully synced
-                const remoteConfig = remoteData.appConfig || {};
-                const localConfig = appConfig.value;
+                const remoteConfig = stripForceNetworkMode((remoteData.appConfig || {}) as Record<string, unknown>);
+                const localConfig = stripForceNetworkMode(appConfig.value as unknown as Record<string, unknown>);
                 const isConfigSame = JSON.stringify(remoteConfig) === JSON.stringify(localConfig);
 
                 if (isLayoutSame && isGroupsSame && isConfigSame) {
@@ -2260,12 +2204,10 @@ export const useMainStore = defineStore("main", () => {
   );
 
   watch(
-    () => appConfig.value.forceNetworkMode,
+    forceNetworkMode,
     (mode, prev) => {
       if (!mode || mode === prev) return;
-      if (isApplyingNetworkMode) return;
-      scheduleNetworkModeBroadcast(mode);
-      // 白名单/延迟模式切换时重启心跳，使新间隔生效
+      if (!isValidNetworkMode(mode)) return;
       if (isConnected.value) {
         stopNetworkHeartbeat();
         startNetworkHeartbeat();
@@ -2276,7 +2218,7 @@ export const useMainStore = defineStore("main", () => {
   watch(
     appConfig,
     () => {
-      if (!isInitializing && !isApplyingNetworkMode && !isApplyingServerData) {
+      if (!isInitializing && !isApplyingServerData) {
         markDirty();
       }
     },
@@ -2453,6 +2395,7 @@ export const useMainStore = defineStore("main", () => {
     widgets,
     mergedWidgets,
     appConfig,
+    forceNetworkMode,
     password,
     isLogged,
     token,
@@ -2528,5 +2471,8 @@ export const useMainStore = defineStore("main", () => {
     unregisterDashboardPulse,
     startDashboardPulse,
     stopDashboardPulse,
+    lockServerSync,
+    unlockServerSync,
+    isServerSyncLocked,
   };
 });

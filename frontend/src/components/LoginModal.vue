@@ -37,6 +37,23 @@ watch(
 
 const close = () => emit("update:show", false);
 
+// #region agent log
+function debugIconLoad(result: "ok" | "error") {
+  fetch("http://127.0.0.1:7872/ingest/26a085c1-eea6-41df-83f2-c178aa092a66", {
+    method: "POST",
+    headers: { "Content-Type": "application/json", "X-Debug-Session-Id": "214d88" },
+    body: JSON.stringify({
+      sessionId: "214d88",
+      location: "LoginModal.vue:icon",
+      message: "icon_load",
+      data: { result, src: "/ICON.PNG", origin: typeof location !== "undefined" ? location.origin : "" },
+      timestamp: Date.now(),
+      hypothesisId: "H4",
+    }),
+  }).catch(() => {});
+}
+// #endregion
+
 const handleSubmit = async () => {
   // If single user mode, username can be empty (defaults to admin on server)
   if (authMode.value === "multi" && !username.value.trim()) {
@@ -83,7 +100,13 @@ const handleSubmit = async () => {
         <h3 class="text-lg font-bold text-gray-800 flex items-center gap-2">
           <span v-if="isRegister">👤 新用户注册</span>
           <template v-else>
-            <img src="/ICON.PNG" class="w-6 h-6 object-contain" alt="lock" />
+            <img
+              src="/ICON.PNG"
+              class="w-6 h-6 object-contain"
+              alt="lock"
+              @load="debugIconLoad('ok')"
+              @error="debugIconLoad('error')"
+            />
             <span>
               {{ authMode === "single" ? "管理员登录" : "用户登录" }}
             </span>

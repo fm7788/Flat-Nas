@@ -76,6 +76,8 @@ const classifyByRules = (host, rules) => {
       const suffix = v.slice("domain_suffix:".length).trim();
       if (matchDomainSuffix(host, suffix)) {
         if (suffix.includes("ts.net") || suffix.includes("zerotier")) return "overlay";
+        if (suffix.includes("trycloudflare.com") || suffix.includes("ngrok.io") || suffix.includes("ngrok-free.app"))
+          return "wan";
         return "lan";
       }
       continue;
@@ -159,12 +161,13 @@ export const buildRulesFromPresets = (presets = {}) => {
   return Array.from(new Set(lines)).join("\n");
 };
 
-export const getNetworkConfig = (appConfig = {}) => {
+export const getNetworkConfig = (appConfig = {}, localForceNetworkMode) => {
   const internalDomains = typeof appConfig.internalDomains === "string" ? appConfig.internalDomains : "";
   const userRules = typeof appConfig.networkRules === "string" ? appConfig.networkRules : "";
   const presetRules = buildRulesFromPresets(appConfig.networkPresets || {});
   const networkRules = [userRules, presetRules].filter(Boolean).join("\n");
-  const forceNetworkMode = appConfig.forceNetworkMode || "auto";
+  const mode = typeof localForceNetworkMode === "string" ? localForceNetworkMode : "";
+  const forceNetworkMode = ["auto", "lan", "wan", "latency"].includes(mode) ? mode : "auto";
   const raw = appConfig.latencyThresholdMs;
   const base = typeof raw === "number" && Number.isFinite(raw) ? Math.trunc(raw) : 200;
   const latencyThresholdMs = Math.min(30000, Math.max(20, base));

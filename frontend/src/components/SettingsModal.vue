@@ -18,6 +18,12 @@ import { DEFAULT_NETWORK_RULES, NETWORK_PRESET_RULES } from "@/utils/network";
 const props = defineProps<{ show: boolean }>();
 const emit = defineEmits(["update:show"]);
 const store = useMainStore();
+onMounted(() => {
+  store.lockServerSync();
+});
+onUnmounted(() => {
+  store.unlockServerSync();
+});
 
 const DEFAULT_LATENCY_THRESHOLD_MS = 200;
 const latencyThresholdDraft = ref("");
@@ -39,7 +45,7 @@ const syncLatencyThresholdDraft = () => {
   latencyThresholdTouched.value = false;
 };
 watch(
-  () => store.appConfig.forceNetworkMode,
+  () => store.forceNetworkMode,
   (mode) => {
     if (mode === "latency") syncLatencyThresholdDraft();
   },
@@ -128,8 +134,7 @@ const resetNetworkRules = async () => {
 };
 
 const toggleWhitelistLatencyMode = async () => {
-  store.appConfig.forceNetworkMode = store.appConfig.forceNetworkMode === "latency" ? "auto" : "latency";
-  store.markDirty();
+  store.forceNetworkMode = store.forceNetworkMode === "latency" ? "auto" : "latency";
 };
 
 const ensureNetworkPresets = () => {
@@ -3530,12 +3535,12 @@ watch(activeTab, (val) => {
                 @click="toggleWhitelistLatencyMode"
                 class="px-3 py-1.5 rounded-lg text-xs font-bold transition-colors border whitespace-nowrap"
                 :class="
-                  store.appConfig.forceNetworkMode === 'latency'
+                  store.forceNetworkMode === 'latency'
                     ? 'bg-yellow-100 text-yellow-800 border-yellow-200 hover:bg-yellow-200'
                     : 'bg-white text-gray-700 border-gray-200 hover:bg-gray-50'
                 "
               >
-                {{ store.appConfig.forceNetworkMode === "latency" ? "已启用：白名单+延迟" : "启动：白名单+延迟" }}
+                {{ store.forceNetworkMode === "latency" ? "已启用：白名单+延迟" : "启动：白名单+延迟" }}
               </button>
             </div>
 
@@ -3630,9 +3635,8 @@ ip:100.64."
                 <label class="flex items-center gap-2 cursor-pointer">
                   <input
                     type="radio"
-                    v-model="store.appConfig.forceNetworkMode"
+                    v-model="store.forceNetworkMode"
                     value="auto"
-                    @change="store.markDirty()"
                     class="text-gray-900 focus:ring-blue-400 accent-blue-400"
                   />
                   <span class="text-sm text-gray-700">自动判定 (推荐)</span>
@@ -3640,9 +3644,8 @@ ip:100.64."
                 <label class="flex items-center gap-2 cursor-pointer">
                   <input
                     type="radio"
-                    v-model="store.appConfig.forceNetworkMode"
+                    v-model="store.forceNetworkMode"
                     value="lan"
-                    @change="store.markDirty()"
                     class="text-gray-900 focus:ring-blue-400 accent-blue-400"
                   />
                   <span class="text-sm text-gray-700">强制内网</span>
@@ -3650,9 +3653,8 @@ ip:100.64."
                 <label class="flex items-center gap-2 cursor-pointer">
                   <input
                     type="radio"
-                    v-model="store.appConfig.forceNetworkMode"
+                    v-model="store.forceNetworkMode"
                     value="latency"
-                    @change="store.markDirty()"
                     class="text-gray-900 focus:ring-blue-400 accent-blue-400"
                   />
                   <span class="text-sm text-gray-700">延迟判定</span>
@@ -3660,9 +3662,8 @@ ip:100.64."
                 <label class="flex items-center gap-2 cursor-pointer">
                   <input
                     type="radio"
-                    v-model="store.appConfig.forceNetworkMode"
+                    v-model="store.forceNetworkMode"
                     value="wan"
-                    @change="store.markDirty()"
                     class="text-gray-900 focus:ring-blue-400 accent-blue-400"
                   />
 
@@ -3672,7 +3673,7 @@ ip:100.64."
               <p class="mt-2 text-[11px] text-gray-500">
                 提示：已添加的域名规则在“自动判定”下就会生效；“延迟判定”仅在你切换到该模式时，才会按延迟阈值进一步判定。
               </p>
-              <div v-if="store.appConfig.forceNetworkMode === 'latency'" class="mt-3 space-y-1.5">
+              <div v-if="store.forceNetworkMode === 'latency'" class="mt-3 space-y-1.5">
                 <div class="flex flex-col sm:flex-row sm:items-center gap-2">
                   <div class="text-xs text-gray-600 sm:w-28 shrink-0">延迟阈值 (ms)</div>
                   <div class="flex items-center gap-2 flex-1">

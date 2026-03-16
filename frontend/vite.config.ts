@@ -8,15 +8,16 @@ export default defineConfig(({ mode }) => {
   const isWindows = process.platform === "win32";
   // Docker 构建时只有 server/public 被复制到 /app/server/public，用此路径
   const isDockerBuild = process.env.VITE_DOCKER_BUILD === "1";
+  const serverPublicDirAbs = fileURLToPath(new URL("../server/public", import.meta.url));
   const publicDir = isDockerBuild
     ? "../server/public"
     : isWindows
-      ? "../win/server/public"
+      ? "../server/public"
       : "../debian/server/public";
   const outDir = isDockerBuild
     ? "dist"
     : isWindows
-      ? fileURLToPath(new URL("../win/server/public", import.meta.url))
+      ? serverPublicDirAbs
       : "dist";
   return ({
     base: "/",

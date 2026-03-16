@@ -16,9 +16,8 @@ export function getNetworkConfig(appConfig?: {
   internalDomains?: string;
   networkRules?: string;
   networkPresets?: Record<string, boolean>;
-  forceNetworkMode?: "auto" | "lan" | "wan" | "latency";
   latencyThresholdMs?: number;
-}): {
+}, localForceNetworkMode?: "auto" | "lan" | "wan" | "latency"): {
   internalDomains: string;
   networkRules: string;
   forceNetworkMode: "auto" | "lan" | "wan" | "latency";

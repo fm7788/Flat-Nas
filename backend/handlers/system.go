@@ -5,6 +5,7 @@ import (
 	"flatnasgo-backend/config"
 	"flatnasgo-backend/utils"
 	"io"
+	stdnet "net"
 	"net/http"
 	"os"
 	"os/exec"
@@ -346,6 +347,7 @@ func fetchIPAndCache() bool {
 }
 
 func GetIP(c *gin.Context) {
+	clientIp, clientIpSource := extractClientIP(c.Request)
 	refresh := strings.TrimSpace(c.Query("refresh"))
 	refreshed := false
 	if refresh == "1" || strings.EqualFold(refresh, "true") {
@@ -370,8 +372,8 @@ func GetIP(c *gin.Context) {
 			"region":         region,
 			"city":           city,
 			"queryIp":        ip,
-			"clientIp":       c.ClientIP(),
-			"clientIpSource": "header",
+			"clientIp":       clientIp,
+			"clientIpSource": clientIpSource,
 			"cached":         true,
 		})
 		return
@@ -381,9 +383,9 @@ func GetIP(c *gin.Context) {
 	if refreshed {
 		c.JSON(http.StatusOK, gin.H{
 			"success":        false,
-			"ip":             c.ClientIP(),
-			"clientIp":       c.ClientIP(),
-			"clientIpSource": "request",
+			"ip":             clientIp,
+			"clientIp":       clientIp,
+			"clientIpSource": clientIpSource,
 		})
 		return
 	}
@@ -398,9 +400,9 @@ func GetIP(c *gin.Context) {
 		// Fallback to client IP
 		c.JSON(http.StatusOK, gin.H{
 			"success":        false,
-			"ip":             c.ClientIP(),
-			"clientIp":       c.ClientIP(),
-			"clientIpSource": "request",
+			"ip":             clientIp,
+			"clientIp":       clientIp,
+			"clientIpSource": clientIpSource,
 		})
 		return
 	}
@@ -410,9 +412,9 @@ func GetIP(c *gin.Context) {
 	if err != nil {
 		c.JSON(http.StatusOK, gin.H{
 			"success":        false,
-			"ip":             c.ClientIP(),
-			"clientIp":       c.ClientIP(),
-			"clientIpSource": "request",
+			"ip":             clientIp,
+			"clientIp":       clientIp,
+			"clientIpSource": clientIpSource,
 		})
 		return
 	}
@@ -421,9 +423,9 @@ func GetIP(c *gin.Context) {
 	if err := json.Unmarshal(body, &result); err != nil {
 		c.JSON(http.StatusOK, gin.H{
 			"success":        false,
-			"ip":             c.ClientIP(),
-			"clientIp":       c.ClientIP(),
-			"clientIpSource": "request",
+			"ip":             clientIp,
+			"clientIp":       clientIp,
+			"clientIpSource": clientIpSource,
 		})
 		return
 	}
@@ -457,9 +459,59 @@ func GetIP(c *gin.Context) {
 		"region":         result["regionName"],
 		"city":           result["city"],
 		"queryIp":        result["query"],
-		"clientIp":       c.ClientIP(),
-		"clientIpSource": "header",
+		"clientIp":       clientIp,
+		"clientIpSource": clientIpSource,
 	})
+}
+
+func extractClientIP(r *http.Request) (string, string) {
+	if r == nil {
+		return "", "unknown"
+	}
+	headerKeys := []string{"CF-Connecting-IP", "True-Client-IP", "X-Real-IP"}
+	for _, key := range headerKeys {
+		if ip := normalizeIPString(r.Header.Get(key)); ip != "" {
+			return ip, "header"
+		}
+	}
+	if ip := firstXForwardedForIP(r.Header.Get("X-Forwarded-For")); ip != "" {
+		return ip, "header"
+	}
+	if ip := normalizeIPString(r.RemoteAddr); ip != "" {
+		return ip, "remoteAddr"
+	}
+	return "", "unknown"
+}
+
+func firstXForwardedForIP(xff string) string {
+	raw := strings.TrimSpace(xff)
+	if raw == "" {
+		return ""
+	}
+	parts := strings.Split(raw, ",")
+	for _, part := range parts {
+		if ip := normalizeIPString(part); ip != "" {
+			return ip
+		}
+	}
+	return ""
+}
+
+func normalizeIPString(raw string) string {
+	v := strings.TrimSpace(raw)
+	if v == "" {
+		return ""
+	}
+	v = strings.Trim(v, "[]")
+	if host, _, err := stdnet.SplitHostPort(v); err == nil {
+		v = host
+	}
+	v = strings.TrimSpace(strings.Trim(v, "[]"))
+	ip := stdnet.ParseIP(v)
+	if ip == nil {
+		return ""
+	}
+	return ip.String()
 }
 
 func getLocationString(data map[string]interface{}) string {

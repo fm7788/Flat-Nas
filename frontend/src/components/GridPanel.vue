@@ -443,12 +443,11 @@ const isLanMode = ref(false);
 const latency = ref(0);
 const isChecking = ref(false);
 const networkScope = typeof window !== "undefined" ? window.location.hostname : "default";
-const networkConfig = computed(() => getNetworkConfig(store.appConfig));
+const networkConfig = computed(() => getNetworkConfig(store.appConfig, store.forceNetworkMode));
 const forceMode = computed({
-  get: () => networkConfig.value.forceNetworkMode,
+  get: () => store.forceNetworkMode,
   set: (val) => {
-    store.appConfig.forceNetworkMode = val;
-    store.markDirty();
+    store.forceNetworkMode = val;
   },
 });
 const latencyThresholdMs = computed(() => networkConfig.value.latencyThresholdMs);
@@ -1443,7 +1442,14 @@ const deleteDivCardWidget = (id: string) => {
 // Inactive (View Mode): Poll to keep in sync.
 const { pause: pausePolling, resume: resumePolling } = useIntervalFn(
   async () => {
-    if (store.isLogged && !isEditMode.value) {
+    if (
+      store.isLogged &&
+      !isEditMode.value &&
+      !showSettingsModal.value &&
+      !showGroupSettingsModal.value &&
+      !showEditModal.value &&
+      !showLoginModal.value
+    ) {
       await store.fetchData();
     }
   },
@@ -1451,17 +1457,20 @@ const { pause: pausePolling, resume: resumePolling } = useIntervalFn(
   { immediate: false },
 );
 
+const shouldPausePolling = computed(
+  () =>
+    isEditMode.value ||
+    showSettingsModal.value ||
+    showGroupSettingsModal.value ||
+    showEditModal.value ||
+    showLoginModal.value,
+);
+
 watch(
-  isEditMode,
+  shouldPausePolling,
   (active) => {
-    if (active) {
-      pausePolling();
-    } else {
-      resumePolling();
-      // 退出编辑模式时，不需要立即刷新，因为本地状态就是最新的
-      // 立即刷新反而可能因为服务器尚未写入完成或缓存导致回滚
-      // if (store.isLogged) store.fetchData();
-    }
+    if (active) pausePolling();
+    else resumePolling();
   },
   { immediate: true },
 );
@@ -2469,13 +2478,14 @@ const fetchIp = async (force = false) => {
         if (Date.now() - timestamp < CACHE_DURATION) {
           ipInfo.value = data;
           const { internalDomains, networkRules } = networkConfig.value;
-          const hostnameIsLan = isInternalNetwork(window.location.hostname, internalDomains, networkRules);
+          const hostnameIntrinsicLan = isInternalNetwork(window.location.hostname);
+          const hostnameRulesLan = isInternalNetwork(window.location.hostname, internalDomains, networkRules);
           const canTrustClientIp = data?.clientIpSource === "header";
           const clientIsLan =
             canTrustClientIp &&
             !!data?.clientIp &&
             isInternalNetwork(String(data.clientIp), internalDomains, networkRules);
-          isLanMode.value = hostnameIsLan || clientIsLan;
+          isLanMode.value = hostnameIntrinsicLan || (canTrustClientIp ? clientIsLan : hostnameRulesLan);
           store.ipFetchStatus = "success";
           store.isLanModeInited = true;
           return;
@@ -2529,13 +2539,14 @@ const fetchIp = async (force = false) => {
       ipInfo.value.clientIpSource = data.clientIpSource || "";
 
       const { internalDomains, networkRules } = networkConfig.value;
-      const hostnameIsLan = isInternalNetwork(window.location.hostname, internalDomains, networkRules);
+      const hostnameIntrinsicLan = isInternalNetwork(window.location.hostname);
+      const hostnameRulesLan = isInternalNetwork(window.location.hostname, internalDomains, networkRules);
       const canTrustClientIp = ipInfo.value.clientIpSource === "header";
       const clientIsLan =
         canTrustClientIp &&
         !!ipInfo.value.clientIp &&
         isInternalNetwork(String(ipInfo.value.clientIp), internalDomains, networkRules);
-      isLanMode.value = hostnameIsLan || clientIsLan;
+      isLanMode.value = hostnameIntrinsicLan || (canTrustClientIp ? clientIsLan : hostnameRulesLan);
       store.ipFetchStatus = "success";
     } else {
       ipInfo.value.displayIp = data.ip || "获取失败";
