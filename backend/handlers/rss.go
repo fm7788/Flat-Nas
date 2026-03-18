@@ -11,6 +11,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/gin-gonic/gin"
 	socketio "github.com/googollee/go-socket.io"
 	"golang.org/x/net/html/charset"
 )
@@ -174,6 +175,76 @@ func refreshRssAsync(server *socketio.Server, urlStr string) {
 	_ = sharedWidgetCache.Set(widgetCacheKindRSS, urlStr, items, rssCacheTTL, "ok")
 	server.BroadcastToNamespace("/", "rss:data", map[string]interface{}{
 		"url": urlStr,
+		"data": map[string]interface{}{
+			"items": items,
+		},
+	})
+}
+
+func refreshRssHTTP(urlStr string) {
+	tag := "rss:" + urlStr
+	if !sharedWidgetCache.StartRefresh(tag) {
+		return
+	}
+	defer sharedWidgetCache.EndRefresh(tag)
+	items, err := fetchRssFeed(urlStr)
+	if err != nil {
+		_ = sharedWidgetCache.MarkStatus(widgetCacheKindRSS, urlStr, "error")
+		return
+	}
+	if len(items) == 0 {
+		return
+	}
+	_ = sharedWidgetCache.Set(widgetCacheKindRSS, urlStr, items, rssCacheTTL, "ok")
+}
+
+func GetRss(c *gin.Context) {
+	urlStr := strings.TrimSpace(c.Query("url"))
+	force := strings.EqualFold(c.Query("force"), "true") || c.Query("force") == "1"
+	if urlStr == "" {
+		c.JSON(http.StatusBadRequest, map[string]interface{}{"success": false, "error": "url is required"})
+		return
+	}
+
+	var cachedItems []UnifiedRssItem
+	hasCache, isFresh, _, err := sharedWidgetCache.Get(widgetCacheKindRSS, urlStr, &cachedItems)
+	if err == nil && hasCache && len(cachedItems) > 0 && !force {
+		c.JSON(http.StatusOK, map[string]interface{}{
+			"success": true,
+			"data": map[string]interface{}{
+				"items": cachedItems,
+			},
+			"cached": true,
+		})
+		if !isFresh {
+			go refreshRssHTTP(urlStr)
+		}
+		return
+	}
+
+	items, fetchErr := fetchRssFeed(urlStr)
+	if fetchErr != nil {
+		if err == nil && hasCache && len(cachedItems) > 0 {
+			c.JSON(http.StatusOK, map[string]interface{}{
+				"success": true,
+				"data": map[string]interface{}{
+					"items": cachedItems,
+				},
+				"cached": true,
+				"stale":  true,
+			})
+			return
+		}
+		c.JSON(http.StatusInternalServerError, map[string]interface{}{"success": false, "error": fetchErr.Error()})
+		return
+	}
+	if err := sharedWidgetCache.Set(widgetCacheKindRSS, urlStr, items, rssCacheTTL, "ok"); err != nil {
+		c.JSON(http.StatusInternalServerError, map[string]interface{}{"success": false, "error": err.Error()})
+		return
+	}
+
+	c.JSON(http.StatusOK, map[string]interface{}{
+		"success": true,
 		"data": map[string]interface{}{
 			"items": items,
 		},

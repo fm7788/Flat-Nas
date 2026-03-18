@@ -33,9 +33,9 @@ func debugLog(location, message, hypothesisId string, data map[string]interface{
 		return
 	}
 	payload := map[string]interface{}{
-		"sessionId":     "214d88",
+		"sessionId":    "214d88",
 		"location":     location,
-		"message":       message,
+		"message":      message,
 		"hypothesisId": hypothesisId,
 		"data":         data,
 		"timestamp":    time.Now().UnixMilli(),
@@ -242,6 +242,8 @@ func main() {
 		api.GET("/version", middleware.OptionalAuthMiddleware(), handlers.GetVersion)
 		api.GET("/system-config", handlers.GetSystemConfig)
 		api.GET("/ip", handlers.GetIP)                                                             // Added GetIP
+		api.GET("/hot", handlers.GetHot)
+		api.GET("/rss", handlers.GetRss)
 		api.GET("/weather", handlers.GetWeather)                                                   // Added Weather
 		api.GET("/custom-scripts", middleware.OptionalAuthMiddleware(), handlers.GetCustomScripts) // Added Custom Scripts
 		api.GET("/docker-status", handlers.GetDockerStatus)                                        // Added Docker Status

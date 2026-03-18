@@ -519,11 +519,11 @@ onMounted(() => {
               </p>
               <p class="mt-2 flex flex-wrap items-center gap-2 text-xs">
                 <span class="inline-flex items-center gap-1 rounded-md bg-neutral-100 dark:bg-neutral-700 px-2 py-1 font-mono text-neutral-700 dark:text-neutral-300">
-                  服务端 v{{ store.conflictState.serverVersion }}
+                  服务端 V{{ store.conflictState.serverVersion }}
                 </span>
                 <span class="text-neutral-400 dark:text-neutral-500">/</span>
                 <span class="inline-flex items-center gap-1 rounded-md bg-neutral-100 dark:bg-neutral-700 px-2 py-1 font-mono text-neutral-700 dark:text-neutral-300">
-                  本地 v{{ store.conflictState.clientVersion }}
+                  本地 V{{ store.conflictState.clientVersion }}
                 </span>
               </p>
             </div>
@@ -566,7 +566,7 @@ onMounted(() => {
             服务端配置已更新
           </h2>
           <p class="mt-1.5 text-sm text-neutral-600 dark:text-neutral-400">
-            检测到服务端配置版本 (v{{ store.syncConfirmModal.serverVersion }}) 与当前不同，是否同步为服务端配置？
+            检测到服务端配置版本 (V{{ store.syncConfirmModal.serverVersion }}) 与当前不同，是否同步为服务端配置？
           </p>
           <div class="mt-5 flex flex-col-reverse sm:flex-row gap-3 sm:justify-end">
             <button

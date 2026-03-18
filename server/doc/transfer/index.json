@@ -1,6 +1,13 @@
 {
   "items": [
     {
+      "id": "1773859145774281100",
+      "type": "text",
+      "content": "1",
+      "timestamp": 1773859145774,
+      "sender": "admin"
+    },
+    {
       "id": "b02504a7-d0f2-4927-b4a7-0b9e7272d46e",
       "type": "text",
       "content": "多选模式需要手动退出，切记",
@@ -21,7 +28,12 @@
         "name": "104933-1741661373383a.jpg",
         "size": 653608,
         "type": "image/jpeg",
-        "url": "/api/transfer/file/1767438569933_104933-1741661373383a.jpg"
+        "url": "/api/transfer/file/1767438569933_104933-1741661373383a.jpg",
+        "thumbs": {
+          "128": "/api/transfer/thumb/1767438569933_104933-1741661373383a.jpg/128",
+          "256": "/api/transfer/thumb/1767438569933_104933-1741661373383a.jpg/256",
+          "64": "/api/transfer/thumb/1767438569933_104933-1741661373383a.jpg/64"
+        }
       },
       "timestamp": 1767438569942,
       "sender": "admin"

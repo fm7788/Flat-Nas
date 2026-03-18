@@ -6,10 +6,11 @@ import type { WidgetConfig } from '../types';
 import { nextTick } from 'vue';
 
 // Hoist mocks
-const { mockPut, mockGet } = vi.hoisted(() => {
+const { mockPut, mockGet, mockFetch } = vi.hoisted(() => {
   return {
     mockPut: vi.fn(),
     mockGet: vi.fn(),
+    mockFetch: vi.fn(),
   };
 });
 
@@ -28,6 +29,8 @@ vi.mock('idb', () => ({
 vi.stubGlobal('Sentry', {
   captureException: vi.fn()
 });
+
+vi.stubGlobal('fetch', mockFetch);
 
 // Mock Store
 vi.mock('../stores/main', () => ({
@@ -57,6 +60,15 @@ describe('MemoWidget', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mockGet.mockResolvedValue(null); // Default empty DB
+    mockFetch.mockResolvedValue({
+      ok: true,
+      status: 200,
+      headers: new Headers({ "content-type": "application/json" }),
+      json: async () => ({
+        success: true,
+        data: { content: "server-content", server_ts: 101, mode: "simple" },
+      }),
+    });
 
     // Default Put implementation: successfully stores and prepares Get to return it
     mockPut.mockImplementation(async (store: unknown, data: unknown) => {
@@ -143,5 +155,40 @@ describe('MemoWidget', () => {
     await new Promise(resolve => setTimeout(resolve, 2000));
 
     expect(mockPut.mock.calls.length).toBeGreaterThanOrEqual(3);
+  });
+
+  it('keeps save working under 300ms tunnel forwarding latency', async () => {
+    vi.useFakeTimers();
+    mockFetch.mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          setTimeout(() => {
+            resolve({
+              ok: true,
+              status: 200,
+              headers: new Headers({ "content-type": "application/json" }),
+              json: async () => ({
+                success: true,
+                data: { content: "baseline", server_ts: 101, mode: "simple" },
+              }),
+            });
+          }, 300);
+        }),
+    );
+
+    wrapper = createWrapper();
+    await nextTick();
+
+    const textarea = wrapper.find('textarea');
+    await textarea.setValue('baseline');
+    await textarea.trigger('blur');
+
+    expect(mockFetch).toHaveBeenCalledTimes(1);
+    await vi.advanceTimersByTimeAsync(300);
+    await nextTick();
+
+    const [url, init] = mockFetch.mock.calls[0] as [string, RequestInit];
+    expect(url).toContain('/api/memo/123');
+    expect(init.method).toBe('PUT');
   });
 });

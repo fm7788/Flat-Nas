@@ -22,6 +22,12 @@ const CONFIG = {
   BROADCAST_THROTTLE: 200,
   BROADCAST_RETRY_LIMIT: 3,
   CONFLICT_PROMPT_COOLDOWN: 8000,
+  TUNNEL_FORWARD_BASELINE_MS: 300,
+  SAVE_TIMEOUT_MS: 15000,
+  SAVE_TIMEOUT_RETRY_MS: 25000,
+  POLL_TIMEOUT_MS: 8000,
+  SAVE_RETRY_LIMIT: 3,
+  SAVE_RETRY_BASE_DELAY_MS: 600,
 };
 
 // --- Sync State ---
@@ -62,9 +68,10 @@ const selectedVersionId = ref("new");
 const activeVersionIndex = ref(0);
 const versionWrapperRef = ref<HTMLDivElement | null>(null);
 const autoSaveDelay = computed(() => {
-  if (!store.isLanModeInited) return 800;
-  return store.effectiveIsLan ? 800 : 8000;
+  if (!store.isLanModeInited || store.effectiveIsLan) return 800;
+  return Math.max(900, CONFIG.TUNNEL_FORWARD_BASELINE_MS * 3);
 });
+const preferSocketSync = computed(() => store.isLanModeInited && store.effectiveIsLan);
 
 type VersionOption = {
   id: string;
@@ -175,8 +182,129 @@ const buildConflictSignature = (content: string, serverTs: number, nextMode: str
 let serverSaveTimer: ReturnType<typeof setTimeout> | null = null;
 let broadcastTimer: ReturnType<typeof setTimeout> | null = null;
 let conflictRetryTimer: ReturnType<typeof setTimeout> | null = null;
+let saveRetryTimer: ReturnType<typeof setTimeout> | null = null;
+let saveRetryCount = 0;
+let saveRequestSeq = 0;
 const conflictCooldownUntil = ref(0);
 const lastConflictSignature = ref("");
+const fetchWithTimeout = async (url: string, init: RequestInit, timeoutMs: number) => {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    return await fetch(url, { ...init, signal: controller.signal });
+  } finally {
+    clearTimeout(timer);
+  }
+};
+
+const sleep = (ms: number) =>
+  new Promise<void>((resolve) => {
+    setTimeout(resolve, ms);
+  });
+
+const createSaveRequestID = (id: string, payload: ReturnType<typeof buildPayload>) => {
+  saveRequestSeq = (saveRequestSeq + 1) % 1000000000;
+  return `${id}:${payload.server_ts}:${Date.now()}:${saveRequestSeq}`;
+};
+
+const isAbortLikeError = (error: unknown) => {
+  if (error instanceof DOMException && error.name === "AbortError") return true;
+  if (error instanceof Error) {
+    const msg = error.message.toLowerCase();
+    return msg.includes("aborted") || msg.includes("abort");
+  }
+  return false;
+};
+
+const isRetryableTransportError = (error: unknown) => {
+  if (isAbortLikeError(error)) return true;
+  if (error instanceof TypeError) return true;
+  if (error instanceof Error) {
+    const msg = error.message.toLowerCase();
+    return msg.includes("failed to fetch") || msg.includes("network");
+  }
+  return false;
+};
+
+const requestMemoSave = async (
+  id: string,
+  payload: ReturnType<typeof buildPayload>,
+  keepalive: boolean,
+  requestID: string,
+) => {
+  let lastError: unknown = null;
+  const attempts = keepalive
+    ? [{ timeoutMs: CONFIG.SAVE_TIMEOUT_MS, delayMs: 0 }]
+    : [
+        { timeoutMs: CONFIG.SAVE_TIMEOUT_MS, delayMs: 0 },
+        { timeoutMs: CONFIG.SAVE_TIMEOUT_RETRY_MS, delayMs: CONFIG.SAVE_RETRY_BASE_DELAY_MS },
+        { timeoutMs: CONFIG.SAVE_TIMEOUT_RETRY_MS, delayMs: Math.min(CONFIG.SAVE_RETRY_BASE_DELAY_MS * 2, 2000) },
+      ];
+  for (let index = 0; index < attempts.length; index++) {
+    const attempt = attempts[index];
+    if (index > 0 && attempt.delayMs > 0) {
+      const jitter = Math.floor(Math.random() * Math.min(CONFIG.TUNNEL_FORWARD_BASELINE_MS, 200));
+      await sleep(attempt.delayMs + jitter);
+    }
+    try {
+      return await fetchWithTimeout(
+        `/api/memo/${id}`,
+        {
+          method: "PUT",
+          headers: {
+            ...store.getHeaders(),
+            "Content-Type": "application/json",
+            "X-Idempotency-Key": requestID,
+          },
+          body: JSON.stringify({
+            ...payload,
+            client_request_id: requestID,
+          }),
+          keepalive,
+        },
+        attempt.timeoutMs,
+      );
+    } catch (error) {
+      lastError = error;
+      if (!isRetryableTransportError(error) || keepalive) {
+        throw error;
+      }
+    }
+  }
+  throw lastError;
+};
+
+const parseJsonBody = async (res: Response) => {
+  const contentType = res.headers.get("content-type") || "";
+  if (!contentType.toLowerCase().includes("application/json")) {
+    return { isJson: false, data: null as unknown };
+  }
+  const data = await res.json().catch(() => null);
+  return { isJson: true, data };
+};
+
+const scheduleSaveRetry = () => {
+  if (saveRetryTimer || saveRetryCount >= CONFIG.SAVE_RETRY_LIMIT) return;
+  pendingSave.value = true;
+  const delay = Math.min(CONFIG.SAVE_RETRY_BASE_DELAY_MS * Math.pow(2, saveRetryCount), 8000);
+  saveRetryCount++;
+  saveRetryTimer = setTimeout(() => {
+    saveRetryTimer = null;
+    if (store.isLogged) {
+      void saveToServer(true);
+    }
+  }, delay);
+};
+
+const markSaveError = (message: string, allowRetry = true) => {
+  toastMessage.value = message;
+  showToast.value = true;
+  syncState.value = "cooldown";
+  if (allowRetry) {
+    scheduleSaveRetry();
+  }
+};
+
 const saveToServer = async (immediate = false, keepalive = false) => {
   if (!store.isLogged) return;
   // If conflict is active, block further auto-saves until resolved
@@ -206,104 +334,119 @@ const saveToServer = async (immediate = false, keepalive = false) => {
     pendingSave.value = false;
 
     const payload = buildPayload();
-    fetch(`/api/memo/${id}`, {
-      method: "PUT",
-      headers: {
-        ...store.getHeaders(),
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify(payload),
-      keepalive,
-    })
-      .then(async (res) => {
-        const data = await res.json().catch(() => null);
-        if (res.status === 409) {
-          if (!data?.data) return;
-          const remotePayload = data.data as WidgetConfig["data"];
-          const remoteParsed = parsePayload(remotePayload);
-          const sameContent = remoteParsed.content === localData.value;
-          const sameMode = !remoteParsed.mode || remoteParsed.mode === mode.value;
+    const requestID = createSaveRequestID(id, payload);
+    try {
+      const res = await requestMemoSave(id, payload, keepalive, requestID);
+      const parsedBody = await parseJsonBody(res);
+      if (!parsedBody.isJson) {
+        markSaveError("保存失败：服务返回异常页面");
+        return;
+      }
+      const data = parsedBody.data as { data?: WidgetConfig["data"] } | null;
+      if (res.status === 409) {
+        if (!data?.data) {
+          markSaveError("保存失败：版本冲突数据无效", false);
+          return;
+        }
+        const remotePayload = data.data as WidgetConfig["data"];
+        const remoteParsed = parsePayload(remotePayload);
+        const sameContent = remoteParsed.content === localData.value;
+        const sameMode = !remoteParsed.mode || remoteParsed.mode === mode.value;
 
-          if (sameContent && sameMode) {
-            if (remoteParsed.serverTs) {
-              serverTs.value = remoteParsed.serverTs;
+        if (sameContent && sameMode) {
+          if (remoteParsed.serverTs) {
+            serverTs.value = remoteParsed.serverTs;
+          }
+          conflictState.value = { hasConflict: false, remoteData: null };
+          syncState.value = "idle";
+          showToast.value = false;
+          saveRetryCount = 0;
+          return;
+        }
+
+        if (remoteParsed.serverTs) {
+          serverTs.value = remoteParsed.serverTs;
+          const retryPayload = buildPayload();
+          const retryRequestID = createSaveRequestID(id, retryPayload);
+          const retryRes = await requestMemoSave(id, retryPayload, keepalive, retryRequestID);
+          const retryParsedBody = await parseJsonBody(retryRes);
+          const retryData = retryParsedBody.isJson
+            ? (retryParsedBody.data as { data?: WidgetConfig["data"] } | null)
+            : null;
+          if (retryRes.ok && retryParsedBody.isJson) {
+            if (retryData?.data) {
+              applyRemotePayload(retryData.data);
             }
             conflictState.value = { hasConflict: false, remoteData: null };
             syncState.value = "idle";
             showToast.value = false;
+            saveRetryCount = 0;
             return;
           }
+          if (!retryParsedBody.isJson) {
+            markSaveError("保存失败：服务返回异常页面");
+            return;
+          }
+        }
 
-          if (remoteParsed.serverTs) {
-            serverTs.value = remoteParsed.serverTs;
-            const retryPayload = buildPayload();
-            const retryRes = await fetch(`/api/memo/${id}`, {
-              method: "PUT",
-              headers: {
-                ...store.getHeaders(),
-                "Content-Type": "application/json",
-              },
-              body: JSON.stringify(retryPayload),
-              keepalive,
-            });
-            const retryData = await retryRes.json().catch(() => null);
-            if (retryRes.ok) {
-              if (retryData?.data) {
-                applyRemotePayload(retryData.data);
-              }
-              conflictState.value = { hasConflict: false, remoteData: null };
-              syncState.value = "idle";
-              showToast.value = false;
-              return;
+        const signature = buildConflictSignature(
+          remoteParsed.content,
+          remoteParsed.serverTs,
+          remoteParsed.mode || mode.value,
+        );
+        const now = Date.now();
+        if (
+          signature === lastConflictSignature.value &&
+          now < conflictCooldownUntil.value
+        ) {
+          syncState.value = "cooldown";
+          if (conflictRetryTimer) clearTimeout(conflictRetryTimer);
+          const wait = Math.max(0, conflictCooldownUntil.value - now) + 50;
+          conflictRetryTimer = setTimeout(() => {
+            conflictRetryTimer = null;
+            if (!conflictState.value.hasConflict) {
+              void saveToServer(true);
             }
-          }
-
-          const signature = buildConflictSignature(
-            remoteParsed.content,
-            remoteParsed.serverTs,
-            remoteParsed.mode || mode.value,
-          );
-          const now = Date.now();
-          if (
-            signature === lastConflictSignature.value &&
-            now < conflictCooldownUntil.value
-          ) {
-            syncState.value = "cooldown";
-            if (conflictRetryTimer) clearTimeout(conflictRetryTimer);
-            const wait = Math.max(0, conflictCooldownUntil.value - now) + 50;
-            conflictRetryTimer = setTimeout(() => {
-              conflictRetryTimer = null;
-              if (!conflictState.value.hasConflict) {
-                void saveToServer(true);
-              }
-            }, wait);
-            return;
-          }
-
-          lastConflictSignature.value = signature;
-          conflictCooldownUntil.value = now + CONFIG.CONFLICT_PROMPT_COOLDOWN;
-
-          conflictState.value = {
-            hasConflict: true,
-            remoteData: remotePayload,
-          };
-          syncState.value = "conflict";
-          toastMessage.value = "检测到版本冲突，请选择解决方案";
-          showToast.value = true;
+          }, wait);
           return;
         }
-        if (!res.ok) return;
-        if (data?.data) {
-          applyRemotePayload(data.data);
+
+        lastConflictSignature.value = signature;
+        conflictCooldownUntil.value = now + CONFIG.CONFLICT_PROMPT_COOLDOWN;
+
+        conflictState.value = {
+          hasConflict: true,
+          remoteData: remotePayload,
+        };
+        syncState.value = "conflict";
+        toastMessage.value = "检测到版本冲突，请选择解决方案";
+        showToast.value = true;
+        return;
+      }
+      if (!res.ok) {
+        if (res.status === 401 || res.status === 403) {
+          markSaveError("保存失败：登录状态无效", false);
+          return;
         }
-      })
-      .catch(() => {})
-      .finally(() => {
-        isSaving.value = false;
-        if (pendingSave.value) {
-          saveToServer(true);
-        }
-      });
+        markSaveError(`保存失败：服务异常(${res.status})`);
+        return;
+      }
+      if (data?.data) {
+        applyRemotePayload(data.data);
+      }
+      saveRetryCount = 0;
+      if (saveRetryTimer) {
+        clearTimeout(saveRetryTimer);
+        saveRetryTimer = null;
+      }
+    } catch {
+      markSaveError("保存失败：网络异常，正在重试");
+    } finally {
+      isSaving.value = false;
+      if (pendingSave.value) {
+        saveToServer(true);
+      }
+    }
   };
 
   if (immediate) {
@@ -379,16 +522,24 @@ const pollRemote = async (force = false) => {
   if (!id) return;
   
   // Fix Risk 2: Skip polling if WebSocket is connected and healthy
-  if (store.socket?.connected && !force) {
+  if (preferSocketSync.value && store.socket?.connected && !force) {
     scheduleNextPoll();
     return;
   }
 
   if (import.meta.env.MODE === "test") return;
   try {
-    const res = await fetch(`/api/memo/${id}`, { headers: store.getHeaders() });
+    const res = await fetchWithTimeout(
+      `/api/memo/${id}`,
+      { headers: store.getHeaders() },
+      CONFIG.POLL_TIMEOUT_MS,
+    );
     if (!res.ok) throw new Error(res.statusText);
-    const data = await res.json();
+    const parsedBody = await parseJsonBody(res);
+    if (!parsedBody.isJson) {
+      throw new Error("invalid_content_type");
+    }
+    const data = parsedBody.data as { success?: boolean; data?: WidgetConfig["data"] } | null;
     if (data?.success && data?.data) {
       applyRemotePayload(data.data);
     }
@@ -426,7 +577,7 @@ let lastBroadcastTime = 0;
 let broadcastRetryCount = 0;
 
 const performBroadcast = () => {
-  if (!store.isLogged || !store.socket?.connected) return;
+  if (!store.isLogged || !preferSocketSync.value || !store.socket?.connected) return;
   const payload = buildPayload();
   
   // Fire and forget with simple retry logic (socket.io has built-in buffers but we add app-level retry)
@@ -522,6 +673,9 @@ const updateSyncMode = () => {
 const handleVisibilityChange = () => {
   isPageVisible.value = document.visibilityState === "visible";
   updateSyncMode();
+  if (isPageVisible.value && pendingSave.value) {
+    void saveToServer(true);
+  }
 };
 
 // --- Monitoring ---
@@ -541,7 +695,9 @@ const handleUserActivity = () => {
 const handleOnline = () => {
   isNetworkOnline.value = true;
   updateSyncMode();
-  // Sync pending changes if any (implement later)
+  if (pendingSave.value || syncState.value === "cooldown") {
+    void saveToServer(true);
+  }
 };
 
 const handleOffline = () => {
@@ -749,6 +905,40 @@ const handleSocketUpdate = (data: unknown) => {
   applyRemotePayload(candidate.content as WidgetConfig["data"], true);
 };
 
+let memoSocketBound = false;
+const handleSocketConnect = () => {
+  void pollRemote(true);
+};
+const bindMemoSocketListeners = () => {
+  if (memoSocketBound || !store.socket || typeof store.socket.on !== "function") return;
+  store.socket.on("memo:updated", handleSocketUpdate);
+  store.socket.on("connect", handleSocketConnect);
+  memoSocketBound = true;
+};
+const unbindMemoSocketListeners = () => {
+  if (!memoSocketBound || !store.socket || typeof store.socket.off !== "function") return;
+  store.socket.off("memo:updated", handleSocketUpdate);
+  store.socket.off("connect", handleSocketConnect);
+  memoSocketBound = false;
+};
+
+watch(
+  [() => store.isLogged, preferSocketSync],
+  ([isLogged, useSocket]) => {
+    if (!isLogged) {
+      unbindMemoSocketListeners();
+      return;
+    }
+    if (useSocket) {
+      bindMemoSocketListeners();
+    } else {
+      unbindMemoSocketListeners();
+    }
+    void pollRemote(true);
+  },
+  { immediate: true },
+);
+
 onMounted(() => {
   updateSyncMode();
   idleCheckTimer = setInterval(updateSyncMode, 1000);
@@ -763,16 +953,7 @@ onMounted(() => {
   document.addEventListener("touchstart", handleUserActivity);
   window.addEventListener("beforeunload", handleBeforeUnload);
   handleUserActivity(); // Init
-  
-  if (store.isLogged) {
-    // Fix Risk 2: Listen to WebSocket events
-    if (store.socket && typeof store.socket.on === "function") {
-      store.socket.on("memo:updated", handleSocketUpdate);
-    }
-    // Initial fetch to align state
-    pollRemote(true);
-  }
-  
+
   refreshVersions();
 });
 
@@ -793,11 +974,9 @@ onUnmounted(() => {
   document.removeEventListener("keydown", handleUserActivity);
   document.removeEventListener("touchstart", handleUserActivity);
   window.removeEventListener("beforeunload", handleBeforeUnload);
-  
-  if (store.socket && typeof store.socket.off === "function") {
-    store.socket.off("memo:updated", handleSocketUpdate);
-  }
-  
+
+  unbindMemoSocketListeners();
+
   if (activityTimer) clearTimeout(activityTimer);
   saveToServer(true, true);
 });

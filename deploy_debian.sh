@@ -481,6 +481,19 @@ verify_deploy() {
   else
     log_warn "后端 API 健康检查失败 (可能还在初始化)"
   fi
+
+  local html
+  html="$(curl -fsSL --max-time 8 "http://127.0.0.1:${frontend_port}/" || true)"
+  if [ -z "${html}" ]; then
+    log_warn "前端首页拉取失败，未能完成产物校验"
+  else
+    if printf "%s" "${html}" | grep -Eq '/@vite/client|virtual:vue-devtools-path|/src/main\.(ts|js)'; then
+      fail_with_tip "检测到开发版前端（Vite）被部署到线上，请重新使用 release 包部署 server/public"
+    fi
+    if ! printf "%s" "${html}" | grep -q '/assets/'; then
+      log_warn "前端首页未检测到 /assets/ 引用，请确认静态产物是否完整"
+    fi
+  fi
   
   log_info "部署验证完成"
 }

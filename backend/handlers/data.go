@@ -28,6 +28,10 @@ type getDataCacheEntry struct {
 var getDataCache = map[string]getDataCacheEntry{}
 var getDataCacheMu sync.RWMutex
 var memoFileMu sync.Mutex
+var memoSaveIdempotencyCache = map[string]memoSaveIdempotencyEntry{}
+var memoSaveIdempotencyMu sync.Mutex
+
+const memoSaveIdempotencyTTL = 10 * time.Minute
 
 type MemoFileData struct {
 	Content  string `json:"content"`
@@ -36,9 +40,83 @@ type MemoFileData struct {
 }
 
 type SaveMemoPayload struct {
-	Content  string  `json:"content"`
-	ServerTS *int64  `json:"server_ts"`
-	Mode     *string `json:"mode"`
+	Content         string  `json:"content"`
+	ServerTS        *int64  `json:"server_ts"`
+	Mode            *string `json:"mode"`
+	ClientRequestID *string `json:"client_request_id,omitempty"`
+}
+
+type memoSaveIdempotencyEntry struct {
+	Status    int
+	Body      gin.H
+	CreatedAt time.Time
+}
+
+func normalizeMemoRequestID(raw string) string {
+	s := strings.TrimSpace(raw)
+	if s == "" {
+		return ""
+	}
+	if len(s) > 128 {
+		s = s[:128]
+	}
+	var b strings.Builder
+	for _, r := range s {
+		if (r >= 'a' && r <= 'z') || (r >= 'A' && r <= 'Z') || (r >= '0' && r <= '9') || r == '-' || r == '_' || r == ':' || r == '.' {
+			b.WriteRune(r)
+		}
+	}
+	return strings.TrimSpace(b.String())
+}
+
+func memoSaveIdempotencyGet(cacheKey string) (memoSaveIdempotencyEntry, bool) {
+	if cacheKey == "" {
+		return memoSaveIdempotencyEntry{}, false
+	}
+	now := time.Now()
+	memoSaveIdempotencyMu.Lock()
+	defer memoSaveIdempotencyMu.Unlock()
+	for k, v := range memoSaveIdempotencyCache {
+		if now.Sub(v.CreatedAt) > memoSaveIdempotencyTTL {
+			delete(memoSaveIdempotencyCache, k)
+		}
+	}
+	entry, ok := memoSaveIdempotencyCache[cacheKey]
+	if !ok {
+		return memoSaveIdempotencyEntry{}, false
+	}
+	return memoSaveIdempotencyEntry{
+		Status:    entry.Status,
+		Body:      cloneGinH(entry.Body),
+		CreatedAt: entry.CreatedAt,
+	}, true
+}
+
+func memoSaveIdempotencySet(cacheKey string, status int, body gin.H) {
+	if cacheKey == "" {
+		return
+	}
+	now := time.Now()
+	memoSaveIdempotencyMu.Lock()
+	defer memoSaveIdempotencyMu.Unlock()
+	for k, v := range memoSaveIdempotencyCache {
+		if now.Sub(v.CreatedAt) > memoSaveIdempotencyTTL {
+			delete(memoSaveIdempotencyCache, k)
+		}
+	}
+	memoSaveIdempotencyCache[cacheKey] = memoSaveIdempotencyEntry{
+		Status:    status,
+		Body:      cloneGinH(body),
+		CreatedAt: now,
+	}
+}
+
+func cloneGinH(src gin.H) gin.H {
+	out := gin.H{}
+	for k, v := range src {
+		out[k] = v
+	}
+	return out
 }
 
 func normalizeVersion(v interface{}) int64 {
@@ -219,7 +297,7 @@ func GetData(c *gin.Context) {
 				continue
 			}
 			memoFile := memoFilePath(username, widgetID)
-			data, err := ensureMemoFile(userFile, memoFile, widgetID)
+			data, err := ensureMemoFile(userFile, memoFile, widgetID, widgetMap["data"])
 			if err != nil {
 				continue
 			}
@@ -369,7 +447,7 @@ func loadMemoFallbackContent(userFile, widgetID string) string {
 	return ""
 }
 
-func ensureMemoFile(userFile, memoFile, widgetID string) (MemoFileData, error) {
+func ensureMemoFile(userFile, memoFile, widgetID string, preloadedData interface{}) (MemoFileData, error) {
 	var data MemoFileData
 	if err := utils.ReadJSON(memoFile, &data); err == nil {
 		if data.Mode != "simple" && data.Mode != "rich" {
@@ -386,7 +464,12 @@ func ensureMemoFile(userFile, memoFile, widgetID string) (MemoFileData, error) {
 	} else if !os.IsNotExist(err) {
 		return data, err
 	}
-	content := loadMemoFallbackContent(userFile, widgetID)
+	content := ""
+	if preloadedData != nil {
+		content = extractMemoContentFromWidgetData(preloadedData)
+	} else {
+		content = loadMemoFallbackContent(userFile, widgetID)
+	}
 	serverTS := int64(0)
 	if content != "" {
 		serverTS = time.Now().UnixMilli()
@@ -429,7 +512,7 @@ func GetMemo(c *gin.Context) {
 
 	memoFileMu.Lock()
 	defer memoFileMu.Unlock()
-	data, err := ensureMemoFile(userFile, memoFile, widgetID)
+	data, err := ensureMemoFile(userFile, memoFile, widgetID, nil)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to read memo"})
 		return
@@ -454,6 +537,20 @@ func SaveMemo(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid JSON"})
 		return
 	}
+
+	requestID := normalizeMemoRequestID(c.GetHeader("X-Idempotency-Key"))
+	if requestID == "" && payload.ClientRequestID != nil {
+		requestID = normalizeMemoRequestID(*payload.ClientRequestID)
+	}
+	idempotencyKey := ""
+	if requestID != "" {
+		idempotencyKey = username + "|" + widgetID + "|" + requestID
+		if cached, ok := memoSaveIdempotencyGet(idempotencyKey); ok {
+			c.JSON(cached.Status, cached.Body)
+			return
+		}
+	}
+
 	if payload.ServerTS == nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "server_ts is required"})
 		return
@@ -474,16 +571,18 @@ func SaveMemo(c *gin.Context) {
 	memoFileMu.Lock()
 	defer memoFileMu.Unlock()
 
-	current, err := ensureMemoFile(userFile, memoFile, widgetID)
+	current, err := ensureMemoFile(userFile, memoFile, widgetID, nil)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to read memo"})
 		return
 	}
 	if *payload.ServerTS != current.ServerTS {
-		c.JSON(http.StatusConflict, gin.H{
+		body := gin.H{
 			"error": "Version conflict",
 			"data":  current,
-		})
+		}
+		memoSaveIdempotencySet(idempotencyKey, http.StatusConflict, body)
+		c.JSON(http.StatusConflict, body)
 		return
 	}
 
@@ -519,7 +618,9 @@ func SaveMemo(c *gin.Context) {
 		})
 	}
 
-	c.JSON(http.StatusOK, gin.H{"success": true, "data": next})
+	body := gin.H{"success": true, "data": next}
+	memoSaveIdempotencySet(idempotencyKey, http.StatusOK, body)
+	c.JSON(http.StatusOK, body)
 }
 
 func SaveData(c *gin.Context) {

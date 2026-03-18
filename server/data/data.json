@@ -52,7 +52,6 @@
     "footerHtml": "",
     "footerMarginBottom": 0,
     "footerWidth": 1280,
-    "forceNetworkMode": "auto",
     "gridGap": 24,
     "gridVersion": 2,
     "groupGap": 30,
@@ -61,6 +60,7 @@
     "iconShape": "rounded",
     "internalDomains": "",
     "latencyThresholdMs": 200,
+    "marketplaceListUrl": "http://qdnas.icu:23111/",
     "mobileBackground": "/mobile_backgrounds/104933-1741661373383a.jpg",
     "mobileBackgroundBlur": 0,
     "mobileBackgroundMask": 0,
@@ -498,7 +498,7 @@
     "enableDocker": true
   },
   "username": "",
-  "version": 10748,
+  "version": 10767,
   "widgets": [
     {
       "colSpan": 1,
@@ -524,9 +524,9 @@
           "type": "category"
         }
       ],
-      "enable": false,
+      "enable": true,
       "h": 3,
-      "hideOnMobile": true,
+      "hideOnMobile": false,
       "id": "w6",
       "isPublic": false,
       "layouts": {
@@ -546,9 +546,9 @@
     {
       "colSpan": 1,
       "data": null,
-      "enable": false,
+      "enable": true,
       "h": 1,
-      "hideOnMobile": true,
+      "hideOnMobile": false,
       "id": "clockweather",
       "isPublic": false,
       "layouts": {
@@ -568,9 +568,9 @@
     {
       "colSpan": 1,
       "data": null,
-      "enable": false,
+      "enable": true,
       "h": 1,
-      "hideOnMobile": true,
+      "hideOnMobile": false,
       "id": "w10",
       "isPublic": false,
       "layouts": {
@@ -590,9 +590,9 @@
     {
       "colSpan": 1,
       "data": [],
-      "enable": false,
+      "enable": true,
       "h": 2,
-      "hideOnMobile": true,
+      "hideOnMobile": false,
       "id": "w8",
       "isPublic": false,
       "layouts": {
@@ -613,13 +613,14 @@
     {
       "colSpan": 1,
       "data": {
-        "content": "",
-        "server_ts": 0
+        "content": "1好吧",
+        "mode": "simple",
+        "server_ts": 1773850285739
       },
       "enable": true,
       "h": 1.5,
       "id": "w4",
-      "isPublic": true,
+      "isPublic": false,
       "layouts": {
         "desktop": {
           "h": 1.5,
@@ -648,9 +649,9 @@
           }
         ]
       },
-      "enable": false,
+      "enable": true,
       "h": 3,
-      "hideOnMobile": true,
+      "hideOnMobile": false,
       "id": "hot-list",
       "isPublic": false,
       "layouts": {
@@ -674,9 +675,9 @@
       },
       "enable": true,
       "h": 1.5,
-      "hideOnMobile": true,
+      "hideOnMobile": false,
       "id": "w1",
-      "isPublic": true,
+      "isPublic": false,
       "layouts": {
         "desktop": {
           "h": 1.5,
@@ -737,7 +738,7 @@
       "enable": true,
       "h": 1.5,
       "id": "w3",
-      "isPublic": true,
+      "isPublic": false,
       "layouts": {
         "desktop": {
           "h": 1.5,
@@ -755,9 +756,9 @@
     {
       "colSpan": 1,
       "data": null,
-      "enable": false,
+      "enable": true,
       "h": 2,
-      "hideOnMobile": true,
+      "hideOnMobile": false,
       "id": "w9",
       "isPublic": false,
       "layouts": {
@@ -777,9 +778,9 @@
     {
       "colSpan": 1,
       "data": null,
-      "enable": false,
+      "enable": true,
       "h": 2,
-      "hideOnMobile": true,
+      "hideOnMobile": false,
       "id": "rss-reader",
       "isPublic": false,
       "layouts": {
@@ -800,14 +801,14 @@
       "data": null,
       "enable": true,
       "id": "w5",
-      "isPublic": true,
+      "isPublic": false,
       "type": "search"
     },
     {
       "data": null,
       "enable": true,
       "id": "w7",
-      "isPublic": true,
+      "isPublic": false,
       "type": "quote"
     },
     {
@@ -821,7 +822,7 @@
       "data": null,
       "enable": true,
       "id": "sidebar",
-      "isPublic": true,
+      "isPublic": false,
       "type": "sidebar"
     },
     {
@@ -833,9 +834,9 @@
       },
       "enable": true,
       "h": 1,
-      "hideOnMobile": true,
+      "hideOnMobile": false,
       "id": "w-cd-1765359997069",
-      "isPublic": true,
+      "isPublic": false,
       "layouts": {
         "desktop": {
           "h": 1,
@@ -856,7 +857,7 @@
       "enable": true,
       "h": 2.5,
       "id": "file-transfer",
-      "isPublic": true,
+      "isPublic": false,
       "layouts": {
         "desktop": {
           "h": 2.5,
@@ -876,9 +877,9 @@
       "data": {
         "useMock": true
       },
-      "enable": false,
+      "enable": true,
       "h": 2,
-      "hideOnMobile": true,
+      "hideOnMobile": false,
       "id": "system-status",
       "isPublic": false,
       "layouts": {
@@ -898,8 +899,8 @@
     {
       "colSpan": 1,
       "data": null,
-      "enable": false,
-      "hideOnMobile": true,
+      "enable": true,
+      "hideOnMobile": false,
       "id": "status-monitor",
       "isPublic": false,
       "rowSpan": 1,
@@ -919,7 +920,7 @@
       "enable": true,
       "h": 1,
       "id": "w-cup-1772789780532",
-      "isPublic": true,
+      "isPublic": false,
       "layouts": {
         "desktop": {
           "h": 1,
@@ -955,7 +956,7 @@
       "enable": true,
       "h": 1,
       "id": "div-card-1772789920152-adxlin",
-      "isPublic": true,
+      "isPublic": false,
       "layouts": {
         "desktop": {
           "h": 1,
@@ -991,7 +992,7 @@
       "enable": true,
       "h": 1,
       "id": "div-card-1772790000986-5efv0s",
-      "isPublic": true,
+      "isPublic": false,
       "layouts": {
         "desktop": {
           "h": 1,

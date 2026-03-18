@@ -53,16 +53,6 @@ interface WeatherData {
   forecast: WeatherForecast[];
 }
 
-interface WeatherPayload {
-  city: string;
-  data: WeatherData;
-}
-
-interface WeatherErrorPayload {
-  city: string;
-  error: unknown;
-}
-
 const props = defineProps<{
   widget?: WidgetConfig;
 }>();
@@ -127,7 +117,8 @@ const weather = ref<WeatherData>({
 const isNight = ref(false);
 let timer: ReturnType<typeof setInterval> | null = null;
 let weatherTimer: ReturnType<typeof setInterval> | null = null;
-const WEATHER_SOCKET_TIMEOUT_MS = 8000;
+const WEATHER_POLL_INTERVAL_MS = 2 * 60 * 60 * 1000;
+const WEATHER_REQUEST_TIMEOUT_MS = 8000;
 const rainDrops = ref(
   Array.from({ length: 6 }, (_, i) => ({
     id: i + 1,
@@ -249,6 +240,7 @@ const isCacheValid = (timestamp: number, duration: number) => {
 // 获取天气
 let activeCleanup: (() => void) | undefined;
 let activeRequestId = 0;
+let activeController: AbortController | undefined;
 const buildBackendWeatherUrl = (city: string) => {
   const source = store.appConfig.weatherSource || "uapi";
   const key = store.appConfig.amapKey || "";
@@ -264,8 +256,10 @@ const buildBackendWeatherUrl = (city: string) => {
 };
 const fetchWeather = async (force = false) => {
   activeCleanup?.();
+  activeController?.abort();
+  activeController = undefined;
   const requestId = ++activeRequestId;
-  
+
   let city = "Shanghai";
   let source: "auto" | "manual" | "cache" | "fallback" = "auto";
 
@@ -316,20 +310,41 @@ const fetchWeather = async (force = false) => {
       }
     }
   }
-  
+
   locationSource.value = source;
 
-  const fallbackByRest = async () => {
+  const controller = new AbortController();
+  activeController = controller;
+
+  const cleanup = () => {
+    if (activeCleanup === cleanup) {
+      activeCleanup = undefined;
+    }
+    if (activeController === controller) {
+      activeController = undefined;
+    }
+  };
+  activeCleanup = cleanup;
+
+  const loadByRest = async () => {
+    let timeoutTimer: ReturnType<typeof setTimeout> | null = null;
     try {
-      const res = await fetch(buildBackendWeatherUrl(city));
+      timeoutTimer = setTimeout(() => controller.abort(), WEATHER_REQUEST_TIMEOUT_MS);
+      const res = await fetch(buildBackendWeatherUrl(city), {
+        signal: controller.signal,
+        cache: "no-store",
+      });
       if (!res.ok) throw new Error("REST weather failed");
       const j = await res.json();
       if (!j.success || !j.data) throw new Error("REST payload invalid");
+      if (requestId !== activeRequestId) return;
       weather.value = {
         ...j.data,
         city: j.data.city || city,
       } as WeatherData;
+      networkStatus.value = "online";
     } catch {
+      if (requestId !== activeRequestId) return;
       weather.value = {
         temp: "22",
         city: city,
@@ -341,73 +356,27 @@ const fetchWeather = async (force = false) => {
       locationSource.value = "fallback";
       networkStatus.value = navigator.onLine ? "degraded" : "offline";
     } finally {
+      if (timeoutTimer) {
+        clearTimeout(timeoutTimer);
+      }
       cleanup();
     }
   };
-
-  const onData = (payload: WeatherPayload) => {
-    if (requestId !== activeRequestId) return;
-    if (payload.city === city || (payload.city === "Shanghai" && !props.widget?.data?.city)) {
-      weather.value = {
-        ...payload.data,
-        city: payload.data.city || city,
-      };
-      networkStatus.value = "online";
-      cleanup();
-    }
-  };
-
-  const onError = async (payload: WeatherErrorPayload) => {
-    if (requestId !== activeRequestId) return;
-    if (payload.city === city) {
-      networkStatus.value = "degraded";
-      await fallbackByRest();
-    }
-  };
-
-  let timeoutTimer: ReturnType<typeof setTimeout> | null = null;
-  const cleanup = () => {
-    if (timeoutTimer) {
-      clearTimeout(timeoutTimer);
-      timeoutTimer = null;
-    }
-    store.socket.off("weather:data", onData);
-    store.socket.off("weather:error", onError);
-    if (activeCleanup === cleanup) {
-      activeCleanup = undefined;
-    }
-  };
-  activeCleanup = cleanup;
-
-  store.socket.on("weather:data", onData);
-  store.socket.on("weather:error", onError);
-
-  timeoutTimer = setTimeout(() => {
-    if (requestId !== activeRequestId) return;
-    fallbackByRest();
-  }, WEATHER_SOCKET_TIMEOUT_MS);
-
-  const weatherSource = store.appConfig.weatherSource || "uapi";
-  const key = store.appConfig.amapKey || "";
-  const projectId = store.appConfig.qweatherProjectId || "";
-  const keyId = store.appConfig.qweatherKeyId || "";
-  const privateKey = store.appConfig.qweatherPrivateKey || "";
-
-  store.socket.emit("weather:fetch", { city, source: weatherSource, key, projectId, keyId, privateKey });
+  await loadByRest();
 };
 
 onMounted(() => {
   updateTime();
   fetchWeather();
   timer = setInterval(updateTime, 60000);
-  // Fetch weather every 1 hour
-  weatherTimer = setInterval(fetchWeather, 2 * 60 * 60 * 1000);
+  weatherTimer = setInterval(fetchWeather, WEATHER_POLL_INTERVAL_MS);
 });
 
 onUnmounted(() => {
   if (timer) clearInterval(timer);
   if (weatherTimer) clearInterval(weatherTimer);
   activeCleanup?.();
+  activeController?.abort();
 });
 </script>
 

@@ -56,20 +56,6 @@ export const useMainStore = defineStore("main", () => {
   const DEV_MARKETPLACE_LIST_URL = "http://localhost:5174/";
 
   socket.on("connect", async () => {
-    // #region agent log
-    fetch("http://127.0.0.1:7872/ingest/26a085c1-eea6-41df-83f2-c178aa092a66", {
-      method: "POST",
-      headers: { "Content-Type": "application/json", "X-Debug-Session-Id": "b0ccc3" },
-      body: JSON.stringify({
-        sessionId: "b0ccc3",
-        location: "main.ts:socket connect",
-        message: "socket_connected",
-        data: { socketId: socket.id },
-        hypothesisId: "H1",
-        timestamp: Date.now(),
-      }),
-    }).catch(() => { });
-    // #endregion
     console.log("Socket connected:", socket.id);
     isConnected.value = true;
     startNetworkHeartbeat();
@@ -110,20 +96,6 @@ export const useMainStore = defineStore("main", () => {
   });
 
   socket.on("connect_error", (err: unknown) => {
-    // #region agent log
-    fetch("http://127.0.0.1:7872/ingest/26a085c1-eea6-41df-83f2-c178aa092a66", {
-      method: "POST",
-      headers: { "Content-Type": "application/json", "X-Debug-Session-Id": "b0ccc3" },
-      body: JSON.stringify({
-        sessionId: "b0ccc3",
-        location: "main.ts:socket connect_error",
-        message: "socket_connect_error",
-        data: { err: String(err) },
-        hypothesisId: "H1",
-        timestamp: Date.now(),
-      }),
-    }).catch(() => { });
-    // #endregion
     console.error("Socket connect error:", err);
   });
 
@@ -466,7 +438,7 @@ export const useMainStore = defineStore("main", () => {
   }
 
   // Version Check
-  const currentVersion = "1.1.5dev2";
+  const currentVersion = "1.1.5dev3";
   const latestVersion = ref("");
   const dockerUpdateAvailable = ref(false);
   const updateCheckLastAt = useStorage<number>("flat-nas-update-check-last-at", 0);
@@ -710,7 +682,7 @@ export const useMainStore = defineStore("main", () => {
       dockerCandidate = nextWidgets.find((widget) => widget.type === "docker");
     }
     const listWithoutDocker = nextWidgets.filter((widget) => widget.id !== "docker" && widget.type !== "docker");
-    let finalDockerWidget: WidgetConfig;
+    let finalDockerWidget: WidgetConfig | undefined;
     if (dockerCandidate) {
       finalDockerWidget = dockerCandidate;
       finalDockerWidget.id = "docker";
@@ -720,16 +692,20 @@ export const useMainStore = defineStore("main", () => {
       if (typeof finalDockerWidget.enable !== "boolean") finalDockerWidget.enable = false;
       if (typeof finalDockerWidget.isPublic !== "boolean") finalDockerWidget.isPublic = true;
     } else {
-      finalDockerWidget = {
-        id: "docker",
-        type: "docker",
-        enable: false,
-        isPublic: true,
-        colSpan: 1,
-        rowSpan: 1,
-      };
+      if (isLogged.value) {
+        finalDockerWidget = {
+          id: "docker",
+          type: "docker",
+          enable: false,
+          isPublic: true,
+          colSpan: 1,
+          rowSpan: 1,
+        };
+      }
     }
-    listWithoutDocker.push(finalDockerWidget);
+    if (finalDockerWidget) {
+      listWithoutDocker.push(finalDockerWidget);
+    }
 
     const fileTransferList = listWithoutDocker.filter((widget) => widget.type === "file-transfer");
     if (fileTransferList.length > 1) {
@@ -752,14 +728,16 @@ export const useMainStore = defineStore("main", () => {
       nextWidgets.length = 0;
       nextWidgets.push(...listWithoutDocker);
     } else if (fileTransferList.length === 0) {
-      listWithoutDocker.push({
-        id: "file-transfer",
-        type: "file-transfer",
-        enable: true,
-        colSpan: 2,
-        rowSpan: 2,
-        isPublic: true,
-      });
+      if (isLogged.value) {
+        listWithoutDocker.push({
+          id: "file-transfer",
+          type: "file-transfer",
+          enable: true,
+          colSpan: 2,
+          rowSpan: 2,
+          isPublic: true,
+        });
+      }
       nextWidgets.length = 0;
       nextWidgets.push(...listWithoutDocker);
     } else {
@@ -768,43 +746,51 @@ export const useMainStore = defineStore("main", () => {
     }
 
     if (!nextWidgets.find((widget) => widget.type === "rss")) {
-      nextWidgets.push({
-        id: "rss-reader",
-        type: "rss",
-        enable: false,
-        colSpan: 1,
-        rowSpan: 2,
-        isPublic: true,
-      });
+      if (isLogged.value) {
+        nextWidgets.push({
+          id: "rss-reader",
+          type: "rss",
+          enable: false,
+          colSpan: 1,
+          rowSpan: 2,
+          isPublic: true,
+        });
+      }
     }
     if (!nextWidgets.find((widget) => widget.type === "sidebar")) {
-      nextWidgets.push({
-        id: "sidebar",
-        type: "sidebar",
-        enable: false,
-        isPublic: true,
-      });
+      if (isLogged.value) {
+        nextWidgets.push({
+          id: "sidebar",
+          type: "sidebar",
+          enable: false,
+          isPublic: true,
+        });
+      }
     }
     if (!nextWidgets.find((widget) => widget.type === "system-status")) {
-      nextWidgets.push({
-        id: "system-status",
-        type: "system-status",
-        enable: false,
-        isPublic: true,
-        colSpan: 1,
-        rowSpan: 1,
-        data: { useMock: false },
-      });
+      if (isLogged.value) {
+        nextWidgets.push({
+          id: "system-status",
+          type: "system-status",
+          enable: false,
+          isPublic: true,
+          colSpan: 1,
+          rowSpan: 1,
+          data: { useMock: false },
+        });
+      }
     }
     if (!nextWidgets.find((widget) => widget.type === "status-monitor")) {
-      nextWidgets.push({
-        id: "status-monitor",
-        type: "status-monitor",
-        enable: false,
-        colSpan: 1,
-        rowSpan: 1,
-        isPublic: true,
-      });
+      if (isLogged.value) {
+        nextWidgets.push({
+          id: "status-monitor",
+          type: "status-monitor",
+          enable: false,
+          colSpan: 1,
+          rowSpan: 1,
+          isPublic: true,
+        });
+      }
     }
     return nextWidgets;
   };
@@ -1260,7 +1246,10 @@ export const useMainStore = defineStore("main", () => {
     }
   };
 
+  let isFetchingData = false;
   const fetchAndProcessData = async () => {
+    if (isFetchingData) return;
+    isFetchingData = true;
     try {
       const headers: Record<string, string> = {};
       if (token.value) headers["Authorization"] = `Bearer ${token.value}`;
@@ -1284,12 +1273,6 @@ export const useMainStore = defineStore("main", () => {
       // 我们只在 layoutDirty 为 true 时提示。
       if (layoutDirty.value) {
         if (!confirm("检测到云端数据更新，但您当前有未保存的布局修改。\n是否放弃本地修改并使用云端版本覆盖？\n(取消则保留本地修改，但可能导致版本冲突)")) {
-          // 用户选择保留本地，我们不应用云端数据，但更新 pendingServerVersion 以便下次有机会再同步
-          // 或者也可以直接返回，不做任何事，等待用户手动保存触发冲突解决流程
-          // 这里我们选择只更新版本号（如果在 data-updated 中），但这里是全量 fetch，
-          // data 中包含了 version。
-          // 如果我们不 apply，那么本地数据版本会落后。
-          // 当用户下次保存时，会触发 409，进入冲突流程。
           return;
         }
       }
@@ -1308,6 +1291,8 @@ export const useMainStore = defineStore("main", () => {
       }
     } catch (e) {
       console.error("Fetch data failed", e);
+    } finally {
+      isFetchingData = false;
     }
   };
 
@@ -1326,65 +1311,58 @@ export const useMainStore = defineStore("main", () => {
     }
   };
 
+  let isLoadingSnapshot = false;
   const loadServerSnapshot = async () => {
-    const snapshotStart = performance.now();
-    const fetchStart = performance.now();
-    const res = await fetchWithTimeout("/api/data", { headers: getHeaders() });
-    const fetchMs = performance.now() - fetchStart;
-    if (!res.ok) {
-      throw new Error(`Init failed with status ${res.status}`);
-    }
-    const jsonStart = performance.now();
-    const data = await res.json();
-    const jsonMs = performance.now() - jsonStart;
-    if (data.systemConfig) {
-      systemConfig.value = data.systemConfig;
-    }
+    if (isLoadingSnapshot) return;
+    isLoadingSnapshot = true;
+    try {
+      const snapshotStart = performance.now();
+      const fetchStart = performance.now();
+      const res = await fetchWithTimeout("/api/data", { headers: getHeaders() });
+      const fetchMs = performance.now() - fetchStart;
+      if (!res.ok) {
+        throw new Error(`Init failed with status ${res.status}`);
+      }
+      const jsonStart = performance.now();
+      const data = await res.json();
+      const jsonMs = performance.now() - jsonStart;
+      if (data.systemConfig) {
+        systemConfig.value = data.systemConfig;
+      }
 
-    if (data.username) {
-      username.value = data.username;
-      localStorage.setItem("flat-nas-username", data.username);
+      if (data.username) {
+        username.value = data.username;
+        localStorage.setItem("flat-nas-username", data.username);
+      }
+
+      // Initial load from server snapshot
+      const handleStart = performance.now();
+      handleDataUpdate(data);
+      // Reset dirty state
+      const currentLayoutMap = buildServerLayoutMap(widgets.value);
+      lastSavedLayoutSignature.value = buildServerLayoutSignature(currentLayoutMap);
+      // 更新快照
+      lastSavedLayoutSnapshot.value = JSON.parse(JSON.stringify(currentLayoutMap));
+      layoutDirty.value = false;
+
+      const handleMs = performance.now() - handleStart;
+      saveToCache(data);
+      markServerSnapshotReady();
+      const totalMs = performance.now() - snapshotStart;
+      console.log("init snapshot timing", {
+        fetchMs: Math.round(fetchMs),
+        jsonMs: Math.round(jsonMs),
+        handleMs: Math.round(handleMs),
+        totalMs: Math.round(totalMs),
+      });
+    } finally {
+      isLoadingSnapshot = false;
     }
-
-    // Initial load from server snapshot
-    const handleStart = performance.now();
-    handleDataUpdate(data);
-    // Reset dirty state
-    const currentLayoutMap = buildServerLayoutMap(widgets.value);
-    lastSavedLayoutSignature.value = buildServerLayoutSignature(currentLayoutMap);
-    // 更新快照
-    lastSavedLayoutSnapshot.value = JSON.parse(JSON.stringify(currentLayoutMap));
-    layoutDirty.value = false;
-
-    const handleMs = performance.now() - handleStart;
-    saveToCache(data);
-    markServerSnapshotReady();
-    const totalMs = performance.now() - snapshotStart;
-    console.log("init snapshot timing", {
-      fetchMs: Math.round(fetchMs),
-      jsonMs: Math.round(jsonMs),
-      handleMs: Math.round(handleMs),
-      totalMs: Math.round(totalMs),
-    });
   };
 
   const init = async () => {
     if (isInitializing) return;
     isInitializing = true;
-    // #region agent log
-    fetch("http://127.0.0.1:7872/ingest/26a085c1-eea6-41df-83f2-c178aa092a66", {
-      method: "POST",
-      headers: { "Content-Type": "application/json", "X-Debug-Session-Id": "b0ccc3" },
-      body: JSON.stringify({
-        sessionId: "b0ccc3",
-        location: "main.ts:init",
-        message: "init_start",
-        data: {},
-        hypothesisId: "H5",
-        timestamp: Date.now(),
-      }),
-    }).catch(() => { });
-    // #endregion
 
     hasServerSnapshot.value = false;
     cacheLoadedAt.value = null;
@@ -1443,20 +1421,6 @@ export const useMainStore = defineStore("main", () => {
         }
       }
     } finally {
-      // #region agent log
-      fetch("http://127.0.0.1:7872/ingest/26a085c1-eea6-41df-83f2-c178aa092a66", {
-        method: "POST",
-        headers: { "Content-Type": "application/json", "X-Debug-Session-Id": "b0ccc3" },
-        body: JSON.stringify({
-          sessionId: "b0ccc3",
-          location: "main.ts:init finally",
-          message: "init_done",
-          data: {},
-          hypothesisId: "H5",
-          timestamp: Date.now(),
-        }),
-      }).catch(() => { });
-      // #endregion
       isInitializing = false;
       if (!socketListenersBound) {
         let serverApplyDepth = 0;
@@ -1479,6 +1443,7 @@ export const useMainStore = defineStore("main", () => {
         socket.on(
           "memo:updated",
           ({ widgetId, content }: { widgetId: string; content: WidgetConfig["data"] }) => {
+            if (!effectiveIsLan.value) return;
             withServerApply(() => {
               const w = widgets.value.find((x) => x.id === widgetId);
               if (w) w.data = content;
@@ -1488,6 +1453,7 @@ export const useMainStore = defineStore("main", () => {
         socket.on(
           "todo:updated",
           ({ widgetId, content }: { widgetId: string; content: WidgetConfig["data"] }) => {
+            if (!effectiveIsLan.value) return;
             withServerApply(() => {
               const w = widgets.value.find((x) => x.id === widgetId);
               if (w) w.data = content;

@@ -40,6 +40,10 @@ const props = defineProps<{ widget: WidgetConfig }>();
 const store = useMainStore();
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const socket = ref<any | null>(null);
+const shouldUseSocket = computed(() => store.isLanModeInited && store.effectiveIsLan);
+const TRANSFER_POLL_INTERVAL_MS = 10000;
+let pollTimer: ReturnType<typeof setTimeout> | null = null;
+let pollInFlight = false;
 const { isMobile } = useDevice(toRef(store.appConfig, "deviceMode"));
 const isSmallLayout = computed(
   () =>
@@ -307,6 +311,34 @@ const onTransferUpdate = (event: { type: "add" | "delete"; item?: TransferItem; 
   }
 };
 
+const disconnectTransferSocket = () => {
+  if (!socket.value) return;
+  socket.value.off("transfer:update", onTransferUpdate);
+  socket.value.close();
+  socket.value = null;
+};
+
+const connectTransferSocket = () => {
+  if (socket.value || !store.isLogged || !shouldUseSocket.value) return;
+  socket.value = io();
+  socket.value.on("transfer:update", onTransferUpdate);
+};
+
+const stopPolling = () => {
+  if (pollTimer) {
+    clearTimeout(pollTimer);
+    pollTimer = null;
+  }
+};
+
+const scheduleNextPoll = () => {
+  stopPolling();
+  if (!store.isLogged || shouldUseSocket.value || document.visibilityState === "hidden") return;
+  pollTimer = setTimeout(() => {
+    void pollItems();
+  }, TRANSFER_POLL_INTERVAL_MS);
+};
+
 const fetchItems = async () => {
   if (!store.isLogged) return;
   loading.value = true;
@@ -326,6 +358,25 @@ const fetchItems = async () => {
     error.value = msg || "加载失败";
   } finally {
     loading.value = false;
+  }
+};
+
+const pollItems = async (force = false) => {
+  if (!store.isLogged) return;
+  if (shouldUseSocket.value && !force) {
+    stopPolling();
+    return;
+  }
+  if (pollInFlight) {
+    scheduleNextPoll();
+    return;
+  }
+  pollInFlight = true;
+  try {
+    await fetchItems();
+  } finally {
+    pollInFlight = false;
+    scheduleNextPoll();
   }
 };
 
@@ -880,9 +931,48 @@ watch(
     selectedIds.value = {};
     if (store.isLogged) {
       await fetchItems();
+      if (!shouldUseSocket.value) {
+        scheduleNextPoll();
+      }
       if (activeTab.value === "chat") {
         scrollToBottom();
       }
+    } else {
+      stopPolling();
+    }
+  },
+  { immediate: true },
+);
+
+const handleVisibilityChange = () => {
+  if (document.visibilityState === "hidden") {
+    stopPolling();
+    return;
+  }
+  if (!store.isLogged) return;
+  if (shouldUseSocket.value) {
+    connectTransferSocket();
+    void fetchItems();
+    return;
+  }
+  void pollItems(true);
+};
+
+watch(
+  [() => store.isLogged, shouldUseSocket],
+  ([isLogged, useSocket]) => {
+    if (!isLogged) {
+      disconnectTransferSocket();
+      stopPolling();
+      return;
+    }
+    if (useSocket) {
+      stopPolling();
+      connectTransferSocket();
+      void fetchItems();
+    } else {
+      disconnectTransferSocket();
+      void pollItems(true);
     }
   },
   { immediate: true },
@@ -929,9 +1019,12 @@ onMounted(() => {
   document.addEventListener("paste", onPaste);
   document.addEventListener("keydown", onDocKeyDown);
   document.addEventListener("pointerdown", onDocPointerDownCapture, true);
-
-  socket.value = io();
-  socket.value.on("transfer:update", onTransferUpdate);
+  document.addEventListener("visibilitychange", handleVisibilityChange);
+  if (shouldUseSocket.value) {
+    connectTransferSocket();
+  } else if (store.isLogged) {
+    void pollItems(true);
+  }
 
   setupObserver();
 });
@@ -956,11 +1049,9 @@ onBeforeUnmount(() => {
   document.removeEventListener("paste", onPaste);
   document.removeEventListener("keydown", onDocKeyDown);
   document.removeEventListener("pointerdown", onDocPointerDownCapture, true);
-
-  if (socket.value) {
-    socket.value.off("transfer:update", onTransferUpdate);
-    socket.value.close();
-  }
+  document.removeEventListener("visibilitychange", handleVisibilityChange);
+  disconnectTransferSocket();
+  stopPolling();
 
   if (intersectionObserver) {
     intersectionObserver.disconnect();

@@ -11,6 +11,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/gin-gonic/gin"
 	socketio "github.com/googollee/go-socket.io"
 )
 
@@ -117,6 +118,55 @@ func refreshHotAsync(server *socketio.Server, t string) {
 		"type": t,
 		"data": items,
 	})
+}
+
+func refreshHotHTTP(t string) {
+	tag := "hot:" + t
+	if !sharedWidgetCache.StartRefresh(tag) {
+		return
+	}
+	defer sharedWidgetCache.EndRefresh(tag)
+	_, _ = refreshHotData(t)
+}
+
+func GetHot(c *gin.Context) {
+	t := strings.TrimSpace(c.Query("type"))
+	force := strings.EqualFold(c.Query("force"), "true") || c.Query("force") == "1"
+	if _, ok := hotTTLs[t]; !ok {
+		c.JSON(http.StatusBadRequest, gin.H{"success": false, "error": "unsupported type"})
+		return
+	}
+
+	cacheKey := buildHotCacheKey(t)
+	var cached []HotItem
+	hasCache, isFresh, _, err := sharedWidgetCache.Get(widgetCacheKindHot, cacheKey, &cached)
+	if err == nil && hasCache && len(cached) > 0 && !force {
+		c.JSON(http.StatusOK, gin.H{"success": true, "data": cached, "cached": true})
+		if !isFresh {
+			go refreshHotHTTP(t)
+		}
+		return
+	}
+
+	items, fetchErr := refreshHotData(t)
+	if fetchErr != nil || len(items) == 0 {
+		if err == nil && hasCache && len(cached) > 0 {
+			c.JSON(http.StatusOK, gin.H{
+				"success": true,
+				"data":    cached,
+				"cached":  true,
+				"stale":   true,
+			})
+			return
+		}
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"success": false,
+			"error":   fmt.Sprintf("fetch failed: %v", fetchErr),
+		})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{"success": true, "data": items})
 }
 
 func buildHotCacheKey(t string) string {

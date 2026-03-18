@@ -40,12 +40,29 @@ func Init() {
 	baseDirFromEnv := strings.TrimSpace(os.Getenv("BASE_DIR"))
 	if baseDirFromEnv != "" {
 		BaseDir = baseDirFromEnv
-	} else if filepath.Base(cwd) == "backend" || filepath.Base(cwd) == "frontend" {
-		BaseDir = filepath.Join(filepath.Dir(cwd), "win")
-	} else if filepath.Base(cwd) == "win" {
-		BaseDir = cwd
 	} else {
-		BaseDir = filepath.Join(cwd, "win")
+		cwdBase := filepath.Base(cwd)
+		switch cwdBase {
+		case "backend", "frontend":
+			repoRoot := filepath.Dir(cwd)
+			if dirExists(filepath.Join(repoRoot, "server")) {
+				BaseDir = repoRoot
+			} else if dirExists(filepath.Join(repoRoot, "win", "server")) {
+				BaseDir = filepath.Join(repoRoot, "win")
+			} else {
+				BaseDir = repoRoot
+			}
+		case "win":
+			BaseDir = cwd
+		default:
+			if dirExists(filepath.Join(cwd, "server")) {
+				BaseDir = cwd
+			} else if dirExists(filepath.Join(cwd, "win", "server")) {
+				BaseDir = filepath.Join(cwd, "win")
+			} else {
+				BaseDir = cwd
+			}
+		}
 	}
 
 	DataDir = filepath.Join(BaseDir, "server", "data")
@@ -66,6 +83,11 @@ func Init() {
 	ensureDataFile()
 	ensureAdditionalDataFiles()
 	loadSecretKey()
+}
+
+func dirExists(path string) bool {
+	info, err := os.Stat(path)
+	return err == nil && info != nil && info.IsDir()
 }
 
 func ensureDirs() {

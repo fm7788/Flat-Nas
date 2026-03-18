@@ -305,6 +305,19 @@ verify_deploy() {
   if ! ss -ltnH 2>/dev/null | awk '{print $4}' | grep -Eq "[:.]${FRONTEND_PORT}$"; then
     log_warn "前端端口 ${FRONTEND_PORT} (Nginx) 尚未监听"
   fi
+
+  local html
+  html="$(curl -fsSL --max-time 8 "http://127.0.0.1:${FRONTEND_PORT}/" || true)"
+  if [ -z "${html}" ]; then
+    log_warn "前端首页拉取失败，未能完成产物校验"
+  else
+    if printf "%s" "${html}" | grep -Eq '/@vite/client|virtual:vue-devtools-path|/src/main\.(ts|js)'; then
+      fail_with_tip "检测到开发版前端（Vite）被部署到线上，请重新构建并同步 server/public"
+    fi
+    if ! printf "%s" "${html}" | grep -q '/assets/'; then
+      log_warn "前端首页未检测到 /assets/ 引用，请确认静态产物是否完整"
+    fi
+  fi
 }
 
 on_error() {

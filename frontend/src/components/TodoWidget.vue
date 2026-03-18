@@ -1,6 +1,6 @@
 <script setup lang="ts">
 /* eslint-disable vue/no-mutating-props */
-import { ref, watch, onMounted } from "vue";
+import { computed, onMounted, onUnmounted, ref, watch } from "vue";
 import { useStorage, useDebounceFn } from "@vueuse/core";
 import type { WidgetConfig } from "@/types";
 import { useMainStore } from "../stores/main";
@@ -15,9 +15,97 @@ const props = defineProps<{ widget: WidgetConfig }>();
 const store = useMainStore();
 const newItem = ref("");
 const saveStatus = ref<"saved" | "saving" | "unsaved">("saved");
+const shouldUseSocket = computed(() => store.isLanModeInited && store.effectiveIsLan);
+const TODO_POLL_INTERVAL_MS = 10000;
+const TODO_POLL_TIMEOUT_MS = 8000;
+const TODO_LOCAL_CHANGE_GRACE_MS = 8000;
+let pollTimer: ReturnType<typeof setTimeout> | null = null;
+let pollController: AbortController | null = null;
+let lastLocalMutationAt = 0;
+
+const normalizeTodoItems = (value: unknown): TodoItem[] => {
+  if (!Array.isArray(value)) return [];
+  return value
+    .map((item) => {
+      if (!item || typeof item !== "object") return null;
+      const candidate = item as Partial<TodoItem>;
+      return {
+        id: typeof candidate.id === "string" ? candidate.id : Date.now().toString(),
+        text: typeof candidate.text === "string" ? candidate.text : "",
+        done: Boolean(candidate.done),
+      };
+    })
+    .filter((item): item is TodoItem => item !== null);
+};
+
+const stopPolling = () => {
+  if (pollTimer) {
+    clearTimeout(pollTimer);
+    pollTimer = null;
+  }
+  if (pollController) {
+    pollController.abort();
+    pollController = null;
+  }
+};
+
+const scheduleNextPoll = () => {
+  if (pollTimer) clearTimeout(pollTimer);
+  if (!store.isLogged || shouldUseSocket.value || document.visibilityState === "hidden") return;
+  pollTimer = setTimeout(() => {
+    void pollRemote();
+  }, TODO_POLL_INTERVAL_MS);
+};
+
+const pollRemote = async (force = false) => {
+  if (!store.isLogged) return;
+  if (shouldUseSocket.value && !force) {
+    stopPolling();
+    return;
+  }
+  if (!force) {
+    if (saveStatus.value !== "saved") {
+      scheduleNextPoll();
+      return;
+    }
+    if (Date.now() - lastLocalMutationAt < TODO_LOCAL_CHANGE_GRACE_MS) {
+      scheduleNextPoll();
+      return;
+    }
+  }
+
+  pollController?.abort();
+  const controller = new AbortController();
+  pollController = controller;
+  const timeoutTimer = setTimeout(() => controller.abort(), TODO_POLL_TIMEOUT_MS);
+
+  try {
+    const res = await fetch(`/api/widgets/${encodeURIComponent(props.widget.id)}`, {
+      headers: store.getHeaders(),
+      cache: "no-store",
+      signal: controller.signal,
+    });
+    if (!res.ok) throw new Error(res.statusText);
+    const payload = (await res.json()) as { success?: boolean; data?: unknown };
+    if (!payload.success) throw new Error("todo payload invalid");
+    const nextItems = normalizeTodoItems(payload.data);
+    const currentItems = normalizeTodoItems(props.widget.data);
+    if (JSON.stringify(currentItems) !== JSON.stringify(nextItems)) {
+      props.widget.data = nextItems;
+    }
+  } catch {
+    // Ignore transient polling failures and try again next cycle.
+  } finally {
+    clearTimeout(timeoutTimer);
+    if (pollController === controller) {
+      pollController = null;
+    }
+    scheduleNextPoll();
+  }
+};
 
 const pushUpdate = useDebounceFn(() => {
-  if (!store.isLogged) return;
+  if (!store.isLogged || !shouldUseSocket.value) return;
   store.socket.emit("todo:update", {
     token: store.token || localStorage.getItem("flat-nas-token"),
     widgetId: props.widget.id,
@@ -31,6 +119,7 @@ const persistSave = useDebounceFn(async () => {
   await store.saveWidget();
   setTimeout(() => {
     saveStatus.value = "saved";
+    scheduleNextPoll();
   }, 500);
 }, 500);
 
@@ -51,10 +140,21 @@ onMounted(() => {
   if ((!props.widget.data || props.widget.data.length === 0) && localBackup.value.length > 0) {
     props.widget.data = localBackup.value;
   }
+  document.addEventListener("visibilitychange", handleVisibilityChange);
+  if (store.isLogged && !shouldUseSocket.value) {
+    void pollRemote(true);
+  }
+});
+
+onUnmounted(() => {
+  document.removeEventListener("visibilitychange", handleVisibilityChange);
+  stopPolling();
 });
 
 const handleSave = () => {
+  lastLocalMutationAt = Date.now();
   saveStatus.value = "unsaved";
+  pushUpdate();
   persistSave();
 };
 
@@ -63,7 +163,6 @@ const add = () => {
   if (!props.widget.data) props.widget.data = [];
   props.widget.data.push({ id: Date.now().toString(), text: newItem.value, done: false });
   newItem.value = "";
-  pushUpdate();
   handleSave();
 };
 
@@ -71,9 +170,31 @@ const remove = (index: number | string) => {
   const targetIndex = typeof index === "string" ? Number(index) : index;
   if (Number.isNaN(targetIndex)) return;
   props.widget.data.splice(targetIndex, 1);
-  pushUpdate();
   handleSave();
 };
+
+const handleVisibilityChange = () => {
+  if (document.visibilityState === "hidden") {
+    stopPolling();
+  } else if (!shouldUseSocket.value) {
+    void pollRemote(true);
+  }
+};
+
+watch(
+  [() => store.isLogged, shouldUseSocket],
+  ([isLogged, useSocket]) => {
+    if (!isLogged) {
+      stopPolling();
+      return;
+    }
+    if (useSocket) {
+      stopPolling();
+      return;
+    }
+    void pollRemote(true);
+  },
+);
 
 const handleScrollIsolation = (e: WheelEvent) => {
   const el = e.currentTarget as HTMLDivElement;

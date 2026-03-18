@@ -18,6 +18,18 @@ import { DEFAULT_NETWORK_RULES, NETWORK_PRESET_RULES } from "@/utils/network";
 const props = defineProps<{ show: boolean }>();
 const emit = defineEmits(["update:show"]);
 const store = useMainStore();
+
+// 自动保存所有设置修改
+watch(
+  [() => store.widgets, () => store.appConfig],
+  () => {
+    if (props.show) {
+      store.saveData();
+    }
+  },
+  { deep: true }
+);
+
 onMounted(() => {
   store.lockServerSync();
 });
@@ -2430,7 +2442,7 @@ watch(activeTab, (val) => {
                           <label
                             class="relative inline-flex items-center cursor-pointer"
                             title="公开"
-                            ><input type="checkbox" v-model="w.isPublic" class="sr-only peer" />
+                            ><input type="checkbox" v-model="w.isPublic" class="sr-only peer" @change="store.saveData()" />
                             <div
                               class="w-7 h-4 bg-gray-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-3 after:w-3 after:transition-all peer-checked:bg-blue-500"
                             ></div
@@ -2441,7 +2453,7 @@ watch(activeTab, (val) => {
                           <label
                             class="relative inline-flex items-center cursor-pointer"
                             title="启用"
-                            ><input type="checkbox" v-model="w.enable" class="sr-only peer" />
+                            ><input type="checkbox" v-model="w.enable" class="sr-only peer" @change="store.saveData()" />
                             <div
                               class="w-7 h-4 bg-gray-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-3 after:w-3 after:transition-all peer-checked:bg-green-500"
                             ></div
@@ -2718,7 +2730,7 @@ watch(activeTab, (val) => {
                       <div class="flex flex-col items-center gap-0.5">
                         <span class="text-[10px] text-gray-400 scale-90">公开</span>
                         <label class="relative inline-flex items-center cursor-pointer" title="公开"
-                          ><input type="checkbox" v-model="w.isPublic" class="sr-only peer" />
+                          ><input type="checkbox" v-model="w.isPublic" class="sr-only peer" @change="store.saveData()" />
                           <div
                             class="w-7 h-4 bg-gray-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-3 after:w-3 after:transition-all peer-checked:bg-blue-500"
                           ></div
@@ -2727,7 +2739,7 @@ watch(activeTab, (val) => {
                       <div class="flex flex-col items-center gap-0.5">
                         <span class="text-[10px] text-gray-400 scale-90">启用</span>
                         <label class="relative inline-flex items-center cursor-pointer" title="启用"
-                          ><input type="checkbox" v-model="w.enable" class="sr-only peer" />
+                          ><input type="checkbox" v-model="w.enable" class="sr-only peer" @change="store.saveData()" />
                           <div
                             class="w-7 h-4 bg-gray-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-3 after:w-3 after:transition-all peer-checked:bg-green-500"
                           ></div
@@ -4728,7 +4740,7 @@ document.querySelector('.card-item').addEventListener('click', () => {
                     <span class="text-lg text-gray-700 font-mono">613835409</span>
                   </div>
                   <div class="flex items-center gap-2">
-                    <span class="text-lg text-gray-400 font-mono">v{{ store.currentVersion }}</span>
+                    <span class="text-lg text-gray-400 font-mono">V{{ store.currentVersion }}</span>
                   </div>
                 </div>
 

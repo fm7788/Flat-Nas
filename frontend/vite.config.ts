@@ -6,6 +6,7 @@ import vueDevTools from "vite-plugin-vue-devtools";
 // https://vite.dev/config/
 export default defineConfig(({ mode }) => {
   const isWindows = process.platform === "win32";
+  const devHost = process.env.VITE_DEV_HOST?.trim() || "127.0.0.1";
   // Docker 构建时只有 server/public 被复制到 /app/server/public，用此路径
   const isDockerBuild = process.env.VITE_DOCKER_BUILD === "1";
   const serverPublicDirAbs = fileURLToPath(new URL("../server/public", import.meta.url));
@@ -44,7 +45,7 @@ export default defineConfig(({ mode }) => {
     // ✨✨✨ 关键修改：增加了 /music 的代理 ✨✨✨
     server: {
       port: 23000,
-      host: "0.0.0.0",
+      host: devHost,
       watch: {
         ignored: ["**/data/**", "**/server/**"],
         usePolling: isWindows,

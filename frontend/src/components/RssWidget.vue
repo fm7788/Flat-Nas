@@ -16,36 +16,31 @@ interface RssItem {
   contentSnippet?: string;
 }
 
-interface RssSocketItem {
+interface RssResponseItem {
   title?: string;
   link?: string;
   pubDate?: string;
   contentSnippet?: string;
 }
 
-interface RssDataPayload {
-  url?: string;
+interface RssApiResponse {
+  success?: boolean;
   data?: {
-    items?: RssSocketItem[];
+    items?: RssResponseItem[];
   };
-}
-
-interface RssErrorPayload {
-  url?: string;
   error?: string;
 }
 
-// Backend handles caching (6 hours). Frontend refreshes every 15 minutes.
-const REFRESH_INTERVAL = 15 * 60 * 1000;
+const RSS_POLL_INTERVAL_MS = 15 * 60 * 1000;
 const RSS_FETCH_TIMEOUT_MS = 8000;
 
 const activeFeedId = ref<string>("");
 const list = ref<RssItem[]>([]);
 const loading = ref(false);
 const errorMsg = ref("");
-let activeCleanup: (() => void) | undefined;
 let refreshTimer: ReturnType<typeof setInterval> | undefined;
 let activeRequestId = 0;
+let activeController: AbortController | undefined;
 
 // Get enabled feeds
 const enabledFeeds = computed(() => store.rssFeeds.filter((f) => f.enable));
@@ -96,94 +91,93 @@ watch(
   { deep: true },
 );
 
-const fetchFeed = async (feed: RssFeed) => {
-  if (!feed) return;
-  const requestId = ++activeRequestId;
-  
-  if (activeCleanup) {
-    activeCleanup();
-    activeCleanup = undefined;
-  }
-
+const stopRefreshTimer = () => {
   if (refreshTimer) {
     clearInterval(refreshTimer);
     refreshTimer = undefined;
   }
+};
 
+const startRefreshTimer = () => {
+  stopRefreshTimer();
+  if (typeof document !== "undefined" && document.visibilityState === "hidden") return;
+  refreshTimer = setInterval(() => {
+    const currentFeed = enabledFeeds.value.find((f) => f.id === activeFeedId.value);
+    if (currentFeed) {
+      fetchFeed(currentFeed);
+    }
+  }, RSS_POLL_INTERVAL_MS);
+};
+
+const fetchFeed = async (feed: RssFeed, force = false) => {
+  if (!feed) return;
+  const requestId = ++activeRequestId;
+  activeController?.abort();
+  activeController = undefined;
+  stopRefreshTimer();
+
+  const isFeedChanged = activeFeedId.value !== feed.id;
   activeFeedId.value = feed.id;
   errorMsg.value = "";
 
-  // Always set loading true initially, backend is fast if cached
-  loading.value = true;
-  list.value = [];
-  let timeoutTimer: ReturnType<typeof setTimeout> | undefined;
+  loading.value = isFeedChanged || list.value.length === 0;
+  if (isFeedChanged) {
+    list.value = [];
+  }
 
-  const onData = (payload: RssDataPayload) => {
+  const controller = new AbortController();
+  activeController = controller;
+  const timeoutTimer = setTimeout(() => controller.abort(), RSS_FETCH_TIMEOUT_MS);
+
+  try {
+    const url = `/api/rss?url=${encodeURIComponent(feed.url)}${force ? "&force=1" : ""}`;
+    const res = await fetch(url, {
+      signal: controller.signal,
+      cache: "no-store",
+    });
+    const payload = (await res.json()) as RssApiResponse;
+    if (!res.ok || !payload.success) {
+      throw new Error(payload.error || `HTTP ${res.status}`);
+    }
     if (requestId !== activeRequestId) return;
-    if (payload.url === feed.url) {
-      const items = Array.isArray(payload.data?.items) ? payload.data.items : [];
-      list.value = items.map((item) => ({
-        title: item.title || "",
-        link: item.link || "#",
-        pubDate: item.pubDate,
-        contentSnippet: item.contentSnippet,
-      }));
-      errorMsg.value = "";
-      loading.value = false;
-      if (timeoutTimer) {
-        clearTimeout(timeoutTimer);
-        timeoutTimer = undefined;
-      }
-    }
-  };
-
-  const onError = (payload: RssErrorPayload) => {
+    const items = Array.isArray(payload.data?.items) ? payload.data.items : [];
+    list.value = items.map((item) => ({
+      title: item.title || "",
+      link: item.link || "#",
+      pubDate: item.pubDate,
+      contentSnippet: item.contentSnippet,
+    }));
+    errorMsg.value = "";
+  } catch (error) {
     if (requestId !== activeRequestId) return;
-    if (payload.url === feed.url) {
-      console.error(`Failed to load RSS: ${feed.title}`, payload.error);
-      const detail = typeof payload.error === "string" && payload.error.trim() ? payload.error.trim() : "";
-      errorMsg.value = detail ? `加载失败：${detail}` : "加载失败";
+    console.error(`Failed to load RSS: ${feed.title}`, error);
+    errorMsg.value = controller.signal.aborted ? "加载超时，请重试" : "加载失败";
+    if (list.value.length === 0) {
+      list.value = [];
+    }
+  } finally {
+    clearTimeout(timeoutTimer);
+    if (requestId === activeRequestId) {
       loading.value = false;
-      if (list.value.length === 0) {
-        list.value = [];
-      }
-      if (timeoutTimer) {
-        clearTimeout(timeoutTimer);
-        timeoutTimer = undefined;
-      }
+      startRefreshTimer();
     }
-  };
-
-  activeCleanup = () => {
-    if (timeoutTimer) {
-      clearTimeout(timeoutTimer);
-      timeoutTimer = undefined;
+    if (activeController === controller) {
+      activeController = undefined;
     }
-    store.socket.off("rss:data", onData);
-    store.socket.off("rss:error", onError);
-  };
+  }
+};
 
-  store.socket.on("rss:data", onData);
-  store.socket.on("rss:error", onError);
-
-  const doFetch = () => {
-    if (timeoutTimer) {
-      clearTimeout(timeoutTimer);
-    }
-    timeoutTimer = setTimeout(() => {
-      if (requestId !== activeRequestId) return;
-      loading.value = false;
-      errorMsg.value = "加载超时，请重试";
-      if (list.value.length === 0) {
-        list.value = [];
-      }
-    }, RSS_FETCH_TIMEOUT_MS);
-    store.socket.emit("rss:fetch", { url: feed.url });
-  };
-
-  doFetch();
-
-  refreshTimer = setInterval(doFetch, REFRESH_INTERVAL);
+const handleVisibilityChange = () => {
+  if (document.visibilityState === "hidden") {
+    stopRefreshTimer();
+    return;
+  }
+  const currentFeed = enabledFeeds.value.find((f) => f.id === activeFeedId.value) || enabledFeeds.value[0];
+  if (currentFeed) {
+    fetchFeed(currentFeed);
+  } else {
+    startRefreshTimer();
+  }
 };
 
 onMounted(() => {
@@ -192,17 +186,14 @@ onMounted(() => {
     activeFeedId.value = first.id;
     fetchFeed(first);
   }
+  document.addEventListener("visibilitychange", handleVisibilityChange);
 });
 
 onUnmounted(() => {
-  if (activeCleanup) {
-    activeCleanup();
-    activeCleanup = undefined;
-  }
-  if (refreshTimer) {
-    clearInterval(refreshTimer);
-    refreshTimer = undefined;
-  }
+  activeController?.abort();
+  activeController = undefined;
+  stopRefreshTimer();
+  document.removeEventListener("visibilitychange", handleVisibilityChange);
 });
 
 const handleScrollIsolation = (e: WheelEvent) => {
@@ -292,7 +283,7 @@ const handleHorizontalScroll = (e: WheelEvent) => {
         <div v-else-if="errorMsg" class="p-8 text-center text-white/70 text-xs">
           {{ errorMsg }}
           <button
-            @click="fetchFeed(enabledFeeds.find((f) => f.id === activeFeedId)!)"
+            @click="fetchFeed(enabledFeeds.find((f) => f.id === activeFeedId)!, true)"
             class="block mx-auto mt-2 text-white/80 hover:text-white hover:underline"
           >
             重试
