@@ -146,7 +146,7 @@ debian/server/APP/*
 !debian/server/APP/.gitkeep
 .fnsync_temp_dir/
 win/
-
+.cursor/
 
 # Archives
 *.zip

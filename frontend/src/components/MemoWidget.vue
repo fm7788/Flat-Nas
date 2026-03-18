@@ -517,7 +517,9 @@ let pollRetryCount = 0;
 
 const pollRemote = async (force = false) => {
   // Fix Risk 3: Check isSaving to avoid race condition
-  if (!store.isLogged || !store.isConnected || isEditing.value || isSaving.value || syncState.value !== "idle") return;
+  // 外网/隧道场景下 socket.io 可能不稳定，但 HTTP `/api/memo/:id` 仍可用。
+  // 因此只要用户已登录且组件状态允许，就继续用 HTTP 轮询兜底。
+  if (!store.isLogged || isEditing.value || isSaving.value || syncState.value !== "idle") return;
   const id = props.widget.id;
   if (!id) return;
   

@@ -39,6 +39,8 @@
     "customJsDisclaimerAgreed": true,
     "customJsList": [],
     "customTitle": "FlatNas",
+    "daylightMask": 0.7,
+    "daylightModeEnabled": true,
     "defaultSearchEngine": "baidu",
     "deviceMode": "auto",
     "empireMode": false,
@@ -49,7 +51,6 @@
     "footerHtml": "",
     "footerMarginBottom": 0,
     "footerWidth": 1280,
-    "forceNetworkMode": "auto",
     "gridGap": 8,
     "gridVersion": 2,
     "groupGap": 30,
@@ -58,6 +59,7 @@
     "iconShape": "rounded",
     "internalDomains": "",
     "latencyThresholdMs": 50,
+    "marketplaceListUrl": "http://qdnas.icu:23111/",
     "mobileBackground": "/mobile_backgrounds/104933-1741661373383a.jpg",
     "mobileBackgroundBlur": 0,
     "mobileBackgroundMask": 0,
@@ -81,6 +83,14 @@
       "img3.wallspic.com-sheng_dan_jie-sheng_dan_cai_deng-sheng_dan_shu-jia_ri-sheng_dan_jie_de_zhuang_shi_pin-3178x4768.jpg"
     ],
     "mouseHoverEffect": "scale",
+    "networkPresets": {
+      "cloudflareTunnel": false,
+      "frp": false,
+      "ngrok": false,
+      "tailscale": false,
+      "zerotier": false
+    },
+    "networkRules": "",
     "pcRotation": false,
     "pcRotationInterval": 30,
     "pcRotationMode": "sequential",
@@ -136,6 +146,7 @@
     },
     "wallpaperMobileImageBase": "/mobile_backgrounds",
     "wallpaperPcImageBase": "/backgrounds",
+    "weatherEffectEnabled": true,
     "weatherSource": "uapi",
     "webGroupPagination": false,
     "webGroupPaginationDisableFlip": false,
@@ -660,6 +671,7 @@
     }
   ],
   "username": "admin",
+  "version": 3,
   "widgets": [
     {
       "colSpan": 1,
@@ -694,8 +706,10 @@
     },
     {
       "colSpan": 1,
+      "data": null,
       "enable": true,
       "h": 1,
+      "hideOnMobile": false,
       "id": "clockweather",
       "isPublic": true,
       "layouts": {
@@ -759,7 +773,11 @@
     },
     {
       "colSpan": 1,
-      "data": "1.0.76dev\n修改了一些布局\n优化了内外网判定逻辑\n",
+      "data": {
+        "content": "测试1123",
+        "mode": "simple",
+        "server_ts": 1773860638546
+      },
       "enable": true,
       "h": 2,
       "id": "w4",
@@ -880,9 +898,10 @@
       "type": "rss"
     },
     {
+      "data": null,
       "enable": true,
       "id": "w5",
-      "isPublic": true,
+      "isPublic": false,
       "opacity": 1,
       "textColor": "#050505",
       "type": "search"
@@ -894,6 +913,7 @@
       "type": "quote"
     },
     {
+      "data": null,
       "enable": true,
       "hideOnMobile": true,
       "id": "player",
@@ -989,6 +1009,14 @@
       "isPublic": false,
       "rowSpan": 1,
       "type": "docker"
+    },
+    {
+      "colSpan": 1,
+      "enable": false,
+      "id": "status-monitor",
+      "isPublic": false,
+      "rowSpan": 1,
+      "type": "status-monitor"
     }
   ]
 }

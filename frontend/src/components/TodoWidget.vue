@@ -15,7 +15,9 @@ const props = defineProps<{ widget: WidgetConfig }>();
 const store = useMainStore();
 const newItem = ref("");
 const saveStatus = ref<"saved" | "saving" | "unsaved">("saved");
-const shouldUseSocket = computed(() => store.isLanModeInited && store.effectiveIsLan);
+// LAN 判定只是一种“偏好”。在隧道/反代场景下 socket 可能实际断开，
+// 此时仍需要保留 HTTP 轮询兜底，避免 Todo 永久不同步。
+const shouldUseSocket = computed(() => store.isLanModeInited && store.effectiveIsLan && !!store.socket?.connected);
 const TODO_POLL_INTERVAL_MS = 10000;
 const TODO_POLL_TIMEOUT_MS = 8000;
 const TODO_LOCAL_CHANGE_GRACE_MS = 8000;
@@ -116,11 +118,19 @@ const pushUpdate = useDebounceFn(() => {
 const persistSave = useDebounceFn(async () => {
   if (!store.isLogged) return;
   saveStatus.value = "saving";
-  await store.saveWidget();
-  setTimeout(() => {
-    saveStatus.value = "saved";
-    scheduleNextPoll();
-  }, 500);
+  try {
+    // Todo 的“修改”需要真正写入服务端，否则外网/其他端无法通过轮询拉到最新数据
+    await store.saveWidget();
+    await store.saveData(true);
+  } finally {
+    const didPersist = !store.hasUnsavedChanges;
+    saveStatus.value = didPersist ? "saved" : "unsaved";
+    if (didPersist) {
+      scheduleNextPoll();
+    } else {
+      stopPolling();
+    }
+  }
 }, 500);
 
 // 本地持久化备份：防止网络断开时数据丢失
