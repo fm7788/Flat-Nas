@@ -316,13 +316,20 @@
         },
         {
           "backgroundBlur": 6,
+          "backgroundImage": "",
           "backgroundMask": 0.3,
-          "icon": "https://cdn.simpleicons.org/csdn",
+          "backupLanUrls": [],
+          "backupUrls": [],
+          "description1": "",
+          "description2": "",
+          "description3": "",
+          "icon": "/icon-cache/66cdcdeef70563c70cff95b0ea9a8b370f998762d8223af6ff20656606b42f5d.svg",
           "iconSize": 75,
           "id": "test_item_1764900093080_20",
           "isPublic": true,
           "lanUrl": "https://www.csdn.net",
           "title": "CSDN",
+          "titleColor": "",
           "url": "https://www.csdn.net"
         },
         {
@@ -595,7 +602,7 @@
     "enableDocker": true
   },
   "username": "",
-  "version": 10171,
+  "version": 10172,
   "widgets": [
     {
       "colSpan": 1,
