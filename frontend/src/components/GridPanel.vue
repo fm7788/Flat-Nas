@@ -2266,7 +2266,7 @@ const openGroupDeleteConfirm = (id: string) => {
   showDeleteConfirm.value = true;
 };
 
-const confirmDelete = () => {
+const confirmDelete = async () => {
   if (deleteType.value === "item" && itemToDelete.value) {
     const isDivCard = store.widgets.some((w) => w.id === itemToDelete.value && w.type === "div-card");
     if (isDivCard) {
@@ -2280,6 +2280,14 @@ const confirmDelete = () => {
   showDeleteConfirm.value = false;
   itemToDelete.value = null;
   groupToDelete.value = null;
+  try {
+    const result = await store.saveData(true);
+    if (result === "conflict" || result === "unauthorized") {
+      alert(`删除已执行，但保存失败：${result === "conflict" ? "发生版本冲突" : "未授权或登录已过期"}`);
+    }
+  } catch {
+    alert("删除已执行，但保存失败，请重试");
+  }
 };
 
 onMounted(() => {

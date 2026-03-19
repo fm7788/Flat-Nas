@@ -3,6 +3,7 @@ module flatnasgo-backend
 go 1.25.5
 
 require (
+	github.com/deepteams/webp v1.2.1
 	github.com/docker/docker v25.0.3+incompatible
 	github.com/gin-contrib/cors v1.7.6
 	github.com/gin-contrib/gzip v1.2.5
@@ -11,7 +12,7 @@ require (
 	github.com/googollee/go-socket.io v1.7.0
 	github.com/shirou/gopsutil/v3 v3.24.5
 	golang.org/x/crypto v0.47.0
-	golang.org/x/image v0.0.0-20191009234506-e7c1f5e7dbb8
+	golang.org/x/image v0.0.0-20211028202545-6944b10bf410
 	golang.org/x/net v0.49.0
 )
 

@@ -324,6 +324,22 @@
           "lanUrl": "https://www.csdn.net",
           "title": "CSDN",
           "url": "https://www.csdn.net"
+        },
+        {
+          "backgroundBlur": 6,
+          "backgroundImage": "",
+          "backgroundMask": 0.3,
+          "backupLanUrls": [],
+          "backupUrls": [],
+          "color": "bg-gray-100 text-gray-700",
+          "icon": "/icon-cache/ea23bb84c9a98f50bc007386d2733e21027ee964caeafb44ff2cadb9103fab86.webp",
+          "iconSize": 100,
+          "id": "1773956938017",
+          "isPublic": false,
+          "lanUrl": "https://www.baidu.com/",
+          "title": "baidu ",
+          "titleColor": "",
+          "url": "https://www.baidu.com/"
         }
       ],
       "title": "常用"
@@ -579,7 +595,7 @@
     "enableDocker": true
   },
   "username": "",
-  "version": 10153,
+  "version": 10171,
   "widgets": [
     {
       "colSpan": 1,
@@ -696,7 +712,7 @@
       "data": {
         "content": "123\n12312\n3",
         "mode": "simple",
-        "server_ts": 1773947883667
+        "server_ts": 1773956276319
       },
       "enable": true,
       "h": 2,

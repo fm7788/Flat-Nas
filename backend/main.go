@@ -169,7 +169,7 @@ func main() {
 		api.GET("/data", middleware.OptionalAuthMiddleware(), handlers.GetData)
 		api.GET("/version", middleware.OptionalAuthMiddleware(), handlers.GetVersion)
 		api.GET("/system-config", handlers.GetSystemConfig)
-		api.GET("/ip", handlers.GetIP)                                                             // Added GetIP
+		api.GET("/ip", handlers.GetIP) // Added GetIP
 		api.GET("/hot", handlers.GetHot)
 		api.GET("/rss", handlers.GetRss)
 		api.GET("/weather", handlers.GetWeather)                                                   // Added Weather
@@ -183,6 +183,7 @@ func main() {
 		// Icon Routes
 		api.GET("/ali-icons", handlers.GetAliIcons)
 		api.GET("/get-icon-base64", handlers.GetIconBase64)
+		api.POST("/icon-cache", handlers.CacheIcon)
 
 		// Amap Proxy Routes
 		api.GET("/amap/weather", handlers.GetAmapWeather)

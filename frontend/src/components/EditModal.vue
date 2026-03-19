@@ -829,18 +829,71 @@ const onImgLoad = () => {
 const saveIconToLocal = ref(true);
 const isSaving = ref(false);
 
-const cacheIconToLocal = async (icon: string): Promise<string | null> => {
+const extractIconCacheError = (data: any): string => {
+  if (!data) return "图标缓存失败，请稍后重试";
+  if (typeof data.error === "string") return data.error;
+  if (data.error && typeof data.error.message === "string") {
+    const code = typeof data.error.code === "string" ? data.error.code : "";
+    const tips: Record<string, string> = {
+      invalid_url: "请使用有效的 http/https 图标地址",
+      blocked_host: "该地址属于受限内网地址，建议先上传图标再保存",
+      icon_too_large: "图标超过 5MB，建议压缩后重试",
+      unsupported_icon_type: "仅支持 png/jpg/webp/gif/svg/ico",
+      unsafe_svg: "SVG 含高风险脚本内容，请换一个安全图标",
+      fetch_failed: "远程图标拉取失败，请检查网络后重试",
+    };
+    const tip = code && tips[code] ? `（${tips[code]}）` : "";
+    return `${data.error.message}${tip}`;
+  }
+  return "图标缓存失败，请稍后重试";
+};
+
+const cacheIconToLocal = async (icon: string): Promise<{ path: string | null; error: string | null }> => {
   const trimmed = icon.trim();
-  if (!trimmed) return null;
-  if (trimmed.startsWith("/icon-cache/")) return trimmed;
+  if (!trimmed) return { path: null, error: null };
+  if (trimmed.startsWith("/icon-cache/")) return { path: trimmed, error: null };
 
-  const payload = trimmed.startsWith("data:")
-    ? { dataUrl: trimmed }
-    : /^https?:\/\//i.test(trimmed)
-      ? { url: trimmed }
-      : null;
+  const iconUrlToDataUrl = async (url: string): Promise<string | null> => {
+    try {
+      const res = await fetch(url);
+      if (!res.ok) return null;
+      const blob = await res.blob();
+      return await new Promise((resolve) => {
+        const reader = new FileReader();
+        reader.onload = () => resolve(typeof reader.result === "string" ? reader.result : null);
+        reader.onerror = () => resolve(null);
+        reader.readAsDataURL(blob);
+      });
+    } catch {
+      return null;
+    }
+  };
 
-  if (!payload) return null;
+  // Support relative local icon paths (e.g. "icons/foo.png" from local matching).
+  const normalizeIconUrl = (value: string) => {
+    if (/^https?:\/\//i.test(value)) return value;
+    if (value.startsWith("/icons/")) return `${window.location.origin}${value}`;
+    if (value.startsWith("icons/")) return `${window.location.origin}/${value}`;
+    return "";
+  };
+
+  let payload: { dataUrl?: string; url?: string } | null = null;
+  if (trimmed.startsWith("data:")) {
+    payload = { dataUrl: trimmed };
+  } else {
+    const normalized = normalizeIconUrl(trimmed);
+    if (normalized) {
+      if (trimmed.startsWith("icons/") || trimmed.startsWith("/icons/")) {
+        // Convert local static icons to dataUrl to avoid backend private-host blocking.
+        const dataUrl = await iconUrlToDataUrl(normalized);
+        payload = dataUrl ? { dataUrl } : null;
+      } else {
+        payload = { url: normalized };
+      }
+    }
+  }
+
+  if (!payload) return { path: null, error: "图标地址格式不支持本地缓存，请改为上传图片或使用 http/https 链接" };
 
   try {
     const res = await fetch("/api/icon-cache", {
@@ -848,13 +901,15 @@ const cacheIconToLocal = async (icon: string): Promise<string | null> => {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(payload),
     });
-    if (!res.ok) return null;
-    const data = await res.json();
-    if (data && data.success && typeof data.path === "string" && data.path) return data.path;
-  } catch {
-    // ignore
+    const data = await res.json().catch(() => null);
+    if (!res.ok) return { path: null, error: extractIconCacheError(data) };
+    if (data && data.success && typeof data.path === "string" && data.path) {
+      return { path: data.path, error: null };
+    }
+    return { path: null, error: extractIconCacheError(data) };
+  } catch (e: any) {
+    return { path: null, error: e?.message || "图标缓存请求失败，请稍后重试" };
   }
-  return null;
 };
 
 // 提交保存
@@ -867,7 +922,11 @@ const submit = async () => {
       const icon = (form.value.icon || "").trim();
       if (icon && !icon.startsWith("/icon-cache/")) {
         const cached = await cacheIconToLocal(icon);
-        if (cached) form.value.icon = cached;
+        if (cached.path) {
+          form.value.icon = cached.path;
+        } else if (cached.error) {
+          alert(`图标本地缓存失败：${cached.error}\n将保留当前图标继续保存。`);
+        }
       }
     }
 
