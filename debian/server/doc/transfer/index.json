@@ -1,0 +1,30 @@
+{
+  "items": [
+    {
+      "id": "b02504a7-d0f2-4927-b4a7-0b9e7272d46e",
+      "type": "text",
+      "content": "多选模式需要手动退出，切记",
+      "timestamp": 1767518868993,
+      "sender": "admin"
+    },
+    {
+      "id": "a160b57c-de5c-4134-9c5d-b5986f846247",
+      "type": "text",
+      "content": "右击项目可以多选删除。点击文件或图图片可以下载",
+      "timestamp": 1767518821773,
+      "sender": "admin"
+    },
+    {
+      "id": "5e498a60-1ced-4123-9396-c5c9989de461",
+      "type": "file",
+      "file": {
+        "name": "104933-1741661373383a.jpg",
+        "size": 653608,
+        "type": "image/jpeg",
+        "url": "/api/transfer/file/1767438569933_104933-1741661373383a.jpg"
+      },
+      "timestamp": 1767438569942,
+      "sender": "admin"
+    }
+  ]
+}

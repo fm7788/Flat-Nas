@@ -1,0 +1,303 @@
+export interface NavItem {
+  id: string;
+  title: string;
+  url: string;
+  lanUrl?: string;
+  backupUrls?: (string | { name: string; url: string })[];
+  backupLanUrls?: (string | { name: string; url: string })[];
+  icon: string;
+  // Horizontal mode custom text lines
+  description1?: string;
+  description2?: string;
+  description3?: string;
+  color?: string;
+  titleColor?: string;
+  isPublic: boolean;
+  backgroundImage?: string;
+  backgroundBlur?: number;
+  backgroundMask?: number;
+  iconSize?: number;
+  containerId?: string;
+  containerName?: string;
+  allowRestart?: boolean;
+  allowStop?: boolean;
+}
+
+export interface NavGroup {
+  id: string;
+  title: string;
+  icon?: string;
+  items: NavItem[];
+  isPublic?: boolean;
+  titleColor?: string;
+  preset?: boolean;
+  cardLayout?: "vertical" | "horizontal" | string;
+  iconShape?:
+  | "circle"
+  | "rounded"
+  | "leaf"
+  | "square"
+  | "diamond"
+  | "pentagon"
+  | "hexagon"
+  | "octagon"
+  | "none"
+  | "hidden"
+  | string;
+  cardBgColor?: string;
+  cardTitleColor?: string;
+  cardTitleSize?: number;
+  showCardBackground?: boolean;
+  backgroundImage?: string;
+  backgroundBlur?: number;
+  backgroundMask?: number;
+  autoHideTitle?: boolean;
+  // Layout config overrides
+  gridGap?: number;
+  cardSize?: number;
+  gap?: number;
+  minWidth?: number;
+  height?: number;
+  iconSize?: number;
+}
+
+export interface CustomScript {
+  id: string;
+  name: string;
+  content: string;
+  enable: boolean;
+  useProxy?: boolean;
+}
+
+export interface SearchEngine {
+  id: string;
+  key: string;
+  label: string;
+  urlTemplate: string;
+}
+
+export interface WallpaperConfig {
+  type: "api" | "local";
+  url: string;
+  enabled: boolean;
+  lastUpdated?: number;
+}
+
+export interface AppConfig {
+  background: string;
+  mobileBackground?: string;
+  wallpaperConfig?: WallpaperConfig;
+  mobileWallpaperConfig?: WallpaperConfig;
+  solidBackgroundColor?: string;
+  enableMobileWallpaper?: boolean;
+  pcRotation?: boolean;
+  pcRotationInterval?: number;
+  pcRotationMode?: "random" | "sequential";
+  mobileRotation?: boolean;
+  mobileRotationInterval?: number;
+  mobileRotationMode?: "random" | "sequential";
+  deviceMode?: "auto" | "desktop" | "tablet" | "mobile";
+  widgetAreaSize?: number;
+  widgetAreaCols?: number;
+  widgetAreaRows?: number;
+  webGroupPagination?: boolean;
+  webGroupPaginationDisableFlip?: boolean;
+  backgroundBlur?: number;
+  backgroundMask?: number;
+  mobileBackgroundBlur?: number;
+  mobileBackgroundMask?: number;
+  daylightModeEnabled?: boolean;
+  daylightMask?: number;
+  weatherEffectEnabled?: boolean;
+  internalDomains?: string;
+  networkRules?: string;
+  networkPresets?: {
+    tailscale?: boolean;
+    zerotier?: boolean;
+    frp?: boolean;
+    cloudflareTunnel?: boolean;
+    ngrok?: boolean;
+  };
+  forceNetworkMode?: "auto" | "lan" | "wan" | "latency";
+  latencyThresholdMs?: number;
+  customTitle: string;
+  titleAlign: "left" | "center" | "right" | string;
+  titleSize: number;
+  titleColor: string;
+  cardLayout: "vertical" | "horizontal" | string;
+  cardSize: number;
+  gridGap: number;
+  cardBgColor: string;
+  cardTitleColor: string;
+  cardBorderColor: string;
+  showCardBackground: boolean;
+  iconShape:
+  | "circle"
+  | "rounded"
+  | "leaf"
+  | "square"
+  | "diamond"
+  | "pentagon"
+  | "hexagon"
+  | "octagon"
+  | "none"
+  | "hidden"
+  | string;
+  searchEngines: SearchEngine[];
+  defaultSearchEngine: string;
+  rememberLastEngine: boolean;
+  groupTitleColor: string;
+  groupGap?: number;
+  autoPlayMusic?: boolean;
+  iconSize?: number;
+  showFooterStats?: boolean;
+  footerHtml?: string;
+  footerHeight?: number;
+  footerWidth?: number;
+  footerMarginBottom?: number;
+  footerFontSize?: number;
+  weatherApiUrl?: string; // Custom API URL
+  weatherSource?: "wttr" | "amap" | "qweather" | "uapi"; // Weather source
+  amapKey?: string; // AMap API Key
+  hefengJwt?: string; // QWeather Legacy API Key / Token
+  qweatherProjectId?: string; // QWeather Project ID
+  qweatherKeyId?: string; // QWeather Key ID
+  qweatherPrivateKey?: string; // QWeather Private Key
+  // Wallpaper API management
+  wallpaperApiPcList?: string;
+  wallpaperApiPcUpload?: string;
+  wallpaperApiPcDeleteBase?: string;
+  wallpaperPcImageBase?: string;
+  wallpaperApiMobileList?: string;
+  wallpaperApiMobileUpload?: string;
+  wallpaperApiMobileDeleteBase?: string;
+  wallpaperMobileImageBase?: string;
+  // Wallpaper Sorting
+  pcWallpaperOrder?: string[];
+  mobileWallpaperOrder?: string[];
+  sidebarViewMode?: "bookmarks" | "groups";
+  empireMode?: boolean;
+  customCss?: string;
+  customCssList?: CustomScript[];
+  customJs?: string;
+  customJsList?: CustomScript[];
+  customJsDisclaimerAgreed?: boolean;
+  mouseHoverEffect?: "scale" | "lift" | "glow" | "none" | string;
+  autoUltrawide?: boolean;
+  hideHeaderOnMobile?: boolean;
+  marketplaceListUrl?: string;
+}
+
+export interface MarketplaceItem {
+  id: string;
+  name: string;
+  description?: string;
+  type: "css" | "js" | "component" | "css+js" | "js+component" | "css+component" | "css+js+component";
+  css?: string;
+  js?: string;
+  component?: { title: string; html: string; css: string };
+  useProxy?: boolean;
+}
+
+export interface SystemConfig {
+  authMode: "single" | "multi";
+  enableDocker: boolean;
+  dockerHost?: string;
+}
+
+export interface WidgetConfig {
+  id: string;
+  type: string;
+  enable: boolean;
+  colSpan?: number;
+  rowSpan?: number;
+  // Grid Layout props
+  x?: number;
+  y?: number;
+  w?: number;
+  h?: number;
+  isPublic: boolean;
+  hideOnMobile?: boolean;
+  opacity?: number;
+  textColor?: string;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  data?: any;
+  layouts?: {
+    desktop?: { x: number; y: number; w: number; h: number };
+    tablet?: { x: number; y: number; w: number; h: number };
+    mobile?: { x: number; y: number; w: number; h: number };
+  };
+}
+
+export interface SimpleIcon {
+  title: string;
+  slug: string;
+  hex: string;
+  source: string;
+  svg: string;
+  path: string;
+  guidelines?: string;
+  license?: {
+    type: string;
+    url: string;
+  };
+}
+
+export interface AliIcon {
+  name: string;
+  cnName: string;
+  domain: string;
+  filename: string;
+  url: string;
+  downloadUrl: string;
+}
+
+export interface RssFeed {
+  id: string;
+  url: string;
+  title: string;
+  category?: string;
+  tags?: string[];
+  enable: boolean;
+  isPublic: boolean;
+}
+
+export interface RssCategory {
+  id: string;
+  name: string;
+  feeds: RssFeed[];
+}
+
+export interface BookmarkItem {
+  id: string;
+  title: string;
+  url: string;
+  icon?: string;
+  type?: "link";
+  pinned?: boolean;
+}
+
+export interface BookmarkCategory {
+  id: string;
+  title: string;
+  collapsed?: boolean;
+  children: (BookmarkItem | BookmarkCategory)[];
+  type?: "category";
+}
+
+export interface TodoItem {
+  id: string;
+  text: string;
+  done: boolean;
+}
+
+export interface LuckyStunData {
+  ts?: number;
+  data?: {
+    stun?: string;
+    port?: string | number;
+    ip?: string;
+    [key: string]: unknown;
+  };
+  [key: string]: unknown;
+}

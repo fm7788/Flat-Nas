@@ -1,0 +1,147 @@
+<script setup lang="ts">
+import { ref, watch, onMounted } from "vue";
+import { useStorage } from "@vueuse/core";
+import type { WidgetConfig } from "@/types";
+
+const props = defineProps<{ widget?: WidgetConfig }>();
+
+const display = ref("0");
+const expression = ref("");
+
+// Persist state
+const storageKey = "flatnas-calculator-state";
+const savedState = useStorage(storageKey, { display: "0", expression: "" });
+
+watch([display, expression], () => {
+  savedState.value = { display: display.value, expression: expression.value };
+});
+
+onMounted(() => {
+  if (savedState.value) {
+    display.value = savedState.value.display || "0";
+    expression.value = savedState.value.expression || "";
+  }
+});
+
+const append = (char: string) => {
+  if (display.value === "0" && char !== ".") display.value = "";
+  display.value += char;
+};
+
+const clear = () => {
+  display.value = "0";
+  expression.value = "";
+};
+
+const calc = () => {
+  try {
+    const raw = display.value.trim();
+    const safe = raw.replace(/\s+/g, "");
+    if (!safe || !/^[0-9+\-*/().]+$/.test(safe)) {
+      display.value = "Error";
+      return;
+    }
+    expression.value = raw;
+
+    const result = new Function(`"use strict"; return (${safe})`)();
+    if (typeof result !== "number" || !Number.isFinite(result)) {
+      display.value = "Error";
+      return;
+    }
+    display.value = result.toString();
+  } catch {
+    display.value = "Error";
+  }
+};
+</script>
+
+<template>
+  <div
+    class="w-full h-full backdrop-blur-md border border-white/10 rounded-2xl flex flex-col p-2 text-white overflow-hidden"
+    :style="{ backgroundColor: `rgba(17, 24, 39, ${props.widget?.opacity ?? 0.9})` }"
+  >
+    <div class="flex-none flex flex-col justify-end items-end mb-1 px-1 h-8">
+      <div class="text-[8px] text-gray-400 truncate w-full text-right">{{ expression }}</div>
+      <div class="text-lg font-mono font-bold truncate w-full text-right leading-none">
+        {{ display }}
+      </div>
+    </div>
+
+    <div class="flex-1 grid grid-cols-4 gap-1">
+      <button
+        @click="clear"
+        class="bg-red-500/20 text-red-400 rounded hover:bg-red-500/40 text-[10px]"
+      >
+        C
+      </button>
+      <button @click="append('/')" class="bg-white/10 hover:bg-white/20 rounded text-[10px]">
+        ÷
+      </button>
+      <button @click="append('*')" class="bg-white/10 hover:bg-white/20 rounded text-[10px]">
+        ×
+      </button>
+      <button
+        @click="
+          () => {
+            display = display.slice(0, -1) || '0';
+          }
+        "
+        class="bg-white/10 hover:bg-white/20 rounded text-[10px]"
+      >
+        ⌫
+      </button>
+
+      <button @click="append('7')" class="bg-white/5 hover:bg-white/10 rounded text-xs font-bold">
+        7
+      </button>
+      <button @click="append('8')" class="bg-white/5 hover:bg-white/10 rounded text-xs font-bold">
+        8
+      </button>
+      <button @click="append('9')" class="bg-white/5 hover:bg-white/10 rounded text-xs font-bold">
+        9
+      </button>
+      <button @click="append('-')" class="bg-white/10 hover:bg-white/20 rounded text-[10px]">
+        -
+      </button>
+
+      <button @click="append('4')" class="bg-white/5 hover:bg-white/10 rounded text-xs font-bold">
+        4
+      </button>
+      <button @click="append('5')" class="bg-white/5 hover:bg-white/10 rounded text-xs font-bold">
+        5
+      </button>
+      <button @click="append('6')" class="bg-white/5 hover:bg-white/10 rounded text-xs font-bold">
+        6
+      </button>
+      <button @click="append('+')" class="bg-white/10 hover:bg-white/20 rounded text-[10px]">
+        +
+      </button>
+
+      <button @click="append('1')" class="bg-white/5 hover:bg-white/10 rounded text-xs font-bold">
+        1
+      </button>
+      <button @click="append('2')" class="bg-white/5 hover:bg-white/10 rounded text-xs font-bold">
+        2
+      </button>
+      <button @click="append('3')" class="bg-white/5 hover:bg-white/10 rounded text-xs font-bold">
+        3
+      </button>
+      <button
+        @click="calc"
+        class="bg-blue-500 hover:bg-blue-600 rounded row-span-2 flex items-center justify-center shadow-lg shadow-blue-500/30 text-sm"
+      >
+        =
+      </button>
+
+      <button
+        @click="append('0')"
+        class="col-span-2 bg-white/5 hover:bg-white/10 rounded text-xs font-bold"
+      >
+        0
+      </button>
+      <button @click="append('.')" class="bg-white/5 hover:bg-white/10 rounded text-xs font-bold">
+        .
+      </button>
+    </div>
+  </div>
+</template>

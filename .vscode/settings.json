@@ -1,0 +1,30 @@
+{
+  "files.associations": {
+    "*.vue": "vue",
+    "*.css": "css",
+    "*.go": "go"
+  },
+  "editor.formatOnSave": true,
+  "editor.codeActionsOnSave": {
+    "source.fixAll.eslint": "explicit"
+  },
+  "eslint.validate": [
+    "javascript",
+    "javascriptreact",
+    "typescript",
+    "typescriptreact",
+    "vue"
+  ],
+  "go.workspaces": [
+    "backend"
+  ],
+  "json.schemas": [
+    {
+      "fileMatch": [
+        "package.json"
+      ],
+      "url": "file:///c%3A/DEV/FlatNas/FlatNas(Go)/.vscode/schemas/package.schema.json"
+    }
+  ],
+  "json.schemaDownload.enable": false
+}

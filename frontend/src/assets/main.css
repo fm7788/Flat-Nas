@@ -1,0 +1,284 @@
+@import "tailwindcss";
+
+:root {
+  --overlay-motion-overlay-enter-duration: 140ms;
+  --overlay-motion-overlay-leave-duration: 110ms;
+  --overlay-motion-panel-enter-duration: 260ms;
+  --overlay-motion-panel-leave-duration: 180ms;
+  --overlay-motion-context-enter-duration: 80ms;
+  --overlay-motion-context-leave-duration: 90ms;
+  --overlay-motion-context-scale-from: 0.998;
+  --overlay-motion-dialog-offset-y: 16px;
+  --overlay-motion-dialog-scale-from: 0.982;
+  --overlay-motion-fade-in-duration: 220ms;
+  --overlay-motion-fade-in-offset-y: 8px;
+  --overlay-motion-fade-in-scale-from: 0.985;
+  --overlay-motion-ease-enter: cubic-bezier(0.22, 1, 0.36, 1);
+  --overlay-motion-ease-leave: cubic-bezier(0.4, 0, 1, 1);
+}
+
+.overlay-motion-root {
+  isolation: isolate;
+}
+
+.overlay-motion-panel {
+  width: 100%;
+  will-change: transform, opacity;
+  transform-origin: center center;
+}
+
+.overlay-motion-root-enter-active,
+.overlay-motion-root-leave-active {
+  transition-property: opacity;
+  transition-timing-function: linear;
+}
+
+.overlay-motion-root-enter-active {
+  transition-duration: var(--overlay-motion-overlay-enter-duration);
+}
+
+.overlay-motion-root-leave-active {
+  transition-duration: var(--overlay-motion-overlay-leave-duration);
+}
+
+.overlay-motion-root-enter-active .overlay-motion-panel,
+.overlay-motion-root-leave-active .overlay-motion-panel {
+  transition-property: opacity, transform;
+  transition-timing-function: var(--overlay-motion-ease-enter);
+}
+
+.overlay-motion-root-enter-active .overlay-motion-panel {
+  transition-duration: var(--overlay-motion-panel-enter-duration);
+}
+
+.overlay-motion-root-leave-active .overlay-motion-panel {
+  transition-duration: var(--overlay-motion-panel-leave-duration);
+  transition-timing-function: var(--overlay-motion-ease-leave);
+}
+
+.overlay-motion-root-enter-from,
+.overlay-motion-root-leave-to {
+  opacity: 0;
+}
+
+.overlay-motion-root-enter-from .overlay-motion-panel,
+.overlay-motion-root-leave-to .overlay-motion-panel {
+  opacity: 0;
+}
+
+.overlay-motion-root[data-motion-variant="dialog"] .overlay-motion-panel,
+.overlay-motion-root[data-motion-variant="sheet"] .overlay-motion-panel,
+.overlay-motion-root[data-motion-variant="popover"] .overlay-motion-panel,
+.overlay-motion-root[data-motion-variant="context-menu"] .overlay-motion-panel {
+  transform: translate3d(0, 0, 0) scale(1);
+}
+
+.overlay-motion-root[data-motion-variant="popover"] .overlay-motion-panel,
+.overlay-motion-root[data-motion-variant="context-menu"] .overlay-motion-panel {
+  width: auto;
+}
+
+.overlay-motion-root-enter-from[data-motion-variant="dialog"] .overlay-motion-panel,
+.overlay-motion-root-leave-to[data-motion-variant="dialog"] .overlay-motion-panel {
+  transform: translate3d(0, var(--overlay-motion-dialog-offset-y), 0)
+    scale(var(--overlay-motion-dialog-scale-from));
+}
+
+.overlay-motion-root-enter-active[data-motion-variant="context-menu"] .overlay-motion-panel {
+  transition-duration: var(--overlay-motion-context-enter-duration);
+}
+
+.overlay-motion-root-leave-active[data-motion-variant="context-menu"] .overlay-motion-panel {
+  transition-duration: var(--overlay-motion-context-leave-duration);
+}
+
+.overlay-motion-root-enter-from[data-motion-variant="context-menu"] .overlay-motion-panel,
+.overlay-motion-root-leave-to[data-motion-variant="context-menu"] .overlay-motion-panel {
+  transform: translate3d(0, 0, 0) scale(var(--overlay-motion-context-scale-from));
+}
+
+.overlay-motion-static-popover {
+  animation: overlayMotionStaticPopover 220ms var(--overlay-motion-ease-enter);
+  transform-origin: top right;
+  will-change: transform, opacity;
+}
+
+.animate-fade-in {
+  animation: overlayMotionFadeIn var(--overlay-motion-fade-in-duration) var(--overlay-motion-ease-enter);
+  will-change: transform, opacity;
+}
+
+@keyframes overlayMotionStaticPopover {
+  from {
+    opacity: 0;
+    transform: translate3d(0, 8px, 0) scale(0.98);
+  }
+  to {
+    opacity: 1;
+    transform: translate3d(0, 0, 0) scale(1);
+  }
+}
+
+@keyframes overlayMotionFadeIn {
+  from {
+    opacity: 0;
+    transform: translate3d(0, var(--overlay-motion-fade-in-offset-y), 0)
+      scale(var(--overlay-motion-fade-in-scale-from));
+  }
+  to {
+    opacity: 1;
+    transform: translate3d(0, 0, 0) scale(1);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .overlay-motion-root-enter-active,
+  .overlay-motion-root-leave-active,
+  .overlay-motion-root-enter-active .overlay-motion-panel,
+  .overlay-motion-root-leave-active .overlay-motion-panel {
+    transition-duration: 1ms !important;
+  }
+
+  .overlay-motion-static-popover {
+    animation-duration: 1ms !important;
+  }
+
+  .animate-fade-in {
+    animation-duration: 1ms !important;
+  }
+
+  .overlay-motion-root-enter-from .overlay-motion-panel,
+  .overlay-motion-root-leave-to .overlay-motion-panel {
+    transform: none !important;
+  }
+}
+
+.scrollbar-glass {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(255, 255, 255, 0.32) rgba(255, 255, 255, 0.06);
+}
+
+.scrollbar-glass::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+
+.scrollbar-glass::-webkit-scrollbar-track {
+  background: rgba(255, 255, 255, 0.05);
+  border-radius: 9999px;
+}
+
+.scrollbar-glass::-webkit-scrollbar-thumb {
+  background-color: rgba(255, 255, 255, 0.18);
+  border-radius: 9999px;
+  border: 2px solid rgba(0, 0, 0, 0);
+  background-clip: padding-box;
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.18);
+}
+
+.scrollbar-glass:hover::-webkit-scrollbar-thumb {
+  background-color: rgba(255, 255, 255, 0.28);
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.25);
+}
+
+.scrollbar-glass::-webkit-scrollbar-corner {
+  background: transparent;
+}
+
+.rss-form-panel {
+  --rss-form-bg: #fff7ed;
+  --rss-form-border: #ffedd5;
+  --rss-form-text: #1f2937;
+  --rss-form-title: #9a3412;
+  --rss-form-label: #4b5563;
+  --rss-form-placeholder: #9ca3af;
+  --rss-form-hint: #94a3b8;
+  --rss-form-input-bg: #ffffff;
+  --rss-form-input-border: #e5e7eb;
+  --rss-form-input-text: #111827;
+  --rss-form-input-focus: #f97316;
+  --rss-form-tag-bg: #f3f4f6;
+  --rss-form-tag-text: #6b7280;
+  --rss-form-tag-hover-bg: #ffedd5;
+  --rss-form-tag-hover-text: #c2410c;
+  --rss-form-hover-border: rgba(255, 255, 255, 0.6);
+  --rss-form-focus-ring: rgba(249, 115, 22, 0.35);
+  background-color: var(--rss-form-bg);
+  border-color: var(--rss-form-border);
+  border-width: 1px;
+  color: var(--rss-form-text);
+  transition: border-color 0.2s ease-in-out;
+}
+
+.night-settings .rss-form-panel {
+  --rss-form-bg: rgba(15, 23, 42, 0.72);
+  --rss-form-border: rgba(226, 232, 240, 0.18);
+  --rss-form-text: #f8fafc;
+  --rss-form-title: #fdba74;
+  --rss-form-label: #e2e8f0;
+  --rss-form-placeholder: rgba(226, 232, 240, 0.72);
+  --rss-form-hint: rgba(226, 232, 240, 0.7);
+  --rss-form-input-bg: rgba(2, 6, 23, 0.7);
+  --rss-form-input-border: rgba(226, 232, 240, 0.24);
+  --rss-form-input-text: #f8fafc;
+  --rss-form-input-focus: #fb923c;
+  --rss-form-tag-bg: rgba(30, 41, 59, 0.8);
+  --rss-form-tag-text: #e2e8f0;
+  --rss-form-tag-hover-bg: rgba(124, 45, 18, 0.55);
+  --rss-form-tag-hover-text: #ffedd5;
+  --rss-form-hover-border: rgba(255, 255, 255, 0.6);
+  --rss-form-focus-ring: rgba(251, 146, 60, 0.45);
+}
+
+.rss-form-panel:hover {
+  border-color: var(--rss-form-hover-border);
+  background-color: var(--rss-form-bg);
+}
+
+.rss-form-title {
+  color: var(--rss-form-title);
+}
+
+.rss-form-label {
+  color: var(--rss-form-label);
+}
+
+.rss-form-hint {
+  color: var(--rss-form-hint);
+}
+
+.rss-form-input {
+  background-color: var(--rss-form-input-bg);
+  border-color: var(--rss-form-input-border);
+  color: var(--rss-form-input-text);
+  transition:
+    border-color 0.2s ease-in-out,
+    box-shadow 0.2s ease-in-out,
+    background-color 0.2s ease-in-out;
+}
+
+.rss-form-input::placeholder {
+  color: var(--rss-form-placeholder);
+}
+
+.rss-form-input:focus,
+.rss-form-input:focus-visible {
+  border-color: var(--rss-form-input-focus);
+  box-shadow: 0 0 0 2px var(--rss-form-focus-ring);
+}
+
+.rss-form-tag {
+  background-color: var(--rss-form-tag-bg);
+  color: var(--rss-form-tag-text);
+}
+
+.rss-form-tag:hover {
+  background-color: var(--rss-form-tag-hover-bg);
+  color: var(--rss-form-tag-hover-text);
+}
+
+@media (max-width: 1024px) and (max-height: 768px) {
+  html {
+    zoom: 0.9;
+  }
+}

@@ -1,0 +1,90 @@
+name: Build and Release
+
+on:
+  push:
+    tags:
+      - "v*"
+      - "V*"
+  workflow_dispatch:
+
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: ${{ github.event_name == 'workflow_dispatch' && 'true' || '' }}
+
+permissions:
+  contents: write
+  packages: write
+
+jobs:
+  build-and-release:
+    name: Build and Upload Release Assets
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      # 1. Build Backend (Go)
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: "1.22.5"
+          cache-dependency-path: backend/go.sum
+
+      - name: Build Backend
+        run: |
+          cd backend
+          # Build for Linux amd64 (most common for Debian servers)
+          CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -ldflags="-s -w" -o flatnas-server .
+
+      # 2. Build Frontend (Vue)
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22.12.0"
+          cache: "npm"
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Build Frontend
+        run: |
+          cd frontend
+          npm ci
+          npm run build
+
+      # 3. Prepare Artifacts
+      - name: Prepare Release Package
+        run: |
+          mkdir -p release_pack/server
+
+          # Copy Backend Binary
+          cp backend/flatnas-server release_pack/
+
+          # Copy Static Resources from server/ (Data, PC, APP, Music, Doc, Public)
+          # We copy the entire server directory structure first
+          cp -r server/* release_pack/server/
+
+          # Copy Frontend Dist to server/public (Overlaying existing public files)
+          # Make sure destination exists
+          mkdir -p release_pack/server/public
+          cp -r frontend/dist/* release_pack/server/public/
+
+          # Copy Deploy Script
+          cp deploy_debian.sh release_pack/
+
+      # 4. Zip Artifacts
+      - name: Create ZIP Archive
+        run: |
+          cd release_pack
+          zip -r ../release.zip ./*
+
+      # 5. Upload to Release
+      - name: Upload Release Assets
+        uses: softprops/action-gh-release@v1
+        with:
+          tag_name: ${{ github.ref_name }}
+          name: ${{ github.ref_name }}
+          generate_release_notes: true
+          files: |
+            release.zip
+            deploy_debian.sh
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

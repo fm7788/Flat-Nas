@@ -1,0 +1,22 @@
+{
+    "title": "Local Package JSON Schema",
+    "description": "A local schema to bypass network issues with schemastore.org",
+    "type": "object",
+    "properties": {
+        "name": { "type": "string" },
+        "version": { "type": "string" },
+        "description": { "type": "string" },
+        "main": { "type": "string" },
+        "type": { "type": "string" },
+        "private": { "type": "boolean" },
+        "license": { "type": "string" },
+        "scripts": { "type": "object", "additionalProperties": true },
+        "dependencies": { "type": "object", "additionalProperties": true },
+        "devDependencies": { "type": "object", "additionalProperties": true },
+        "peerDependencies": { "type": "object", "additionalProperties": true },
+        "engines": { "type": "object", "additionalProperties": true },
+        "repository": { "type": "object" },
+        "keywords": { "type": "array", "items": { "type": "string" } }
+    },
+    "additionalProperties": true
+}
