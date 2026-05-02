@@ -127,6 +127,8 @@ export const DEFAULT_NETWORK_RULES = [
   ...NETWORK_PRESET_RULES.ngrok,
 ].join("\n");
 
+const DEFAULT_LATENCY_THRESHOLD_MS = 50;
+
 export const classifyNetworkTarget = (url, networkRules = "", internalDomains = "") => {
   const raw = typeof url === "string" ? url.trim() : String(url ?? "").trim();
   if (!raw) return "wan";
@@ -143,6 +145,12 @@ export const classifyNetworkTarget = (url, networkRules = "", internalDomains = 
 
   const rules = [...parseNetworkRules(networkRules), ...parseNetworkRules(internalDomains)];
   return classifyByRules(host, rules);
+};
+
+export const detectNetworkByLatency = (measuredLatencyMs, thresholdMs = DEFAULT_LATENCY_THRESHOLD_MS) => {
+  if (!Number.isFinite(measuredLatencyMs) || measuredLatencyMs < 0) return "unknown";
+  if (measuredLatencyMs <= thresholdMs) return "lan";
+  return "wan";
 };
 
 export const isInternalNetwork = (url, internalDomains = "", networkRules = "") => {
@@ -169,7 +177,44 @@ export const getNetworkConfig = (appConfig = {}, localForceNetworkMode) => {
   const mode = typeof localForceNetworkMode === "string" ? localForceNetworkMode : "";
   const forceNetworkMode = ["auto", "lan", "wan", "latency"].includes(mode) ? mode : "auto";
   const raw = appConfig.latencyThresholdMs;
-  const base = typeof raw === "number" && Number.isFinite(raw) ? Math.trunc(raw) : 200;
-  const latencyThresholdMs = Math.min(30000, Math.max(20, base));
+  const base = typeof raw === "number" && Number.isFinite(raw) ? Math.trunc(raw) : 50;
+  const latencyThresholdMs = Math.min(30000, Math.max(10, base));
   return { internalDomains, networkRules, forceNetworkMode, latencyThresholdMs };
+};
+
+export const computeEffectiveNetworkMode = (
+  hostname,
+  clientIp,
+  clientIpSource,
+  measuredLatencyMs,
+  { internalDomains = "", networkRules = "", forceNetworkMode = "auto", latencyThresholdMs = 50 } = {},
+) => {
+  const hostnameIntrinsicLan = isInternalNetwork(hostname, "", "");
+  const hostnameRulesLan = isInternalNetwork(hostname, internalDomains, networkRules);
+  const canTrustClientIp = clientIpSource === "header";
+  const clientIsLan =
+    canTrustClientIp &&
+    !!clientIp &&
+    isInternalNetwork(clientIp, internalDomains, networkRules);
+
+  const latencyBasedLan =
+    Number.isFinite(measuredLatencyMs) && measuredLatencyMs > 0 && measuredLatencyMs <= latencyThresholdMs;
+
+  if (forceNetworkMode === "lan") return { isLan: true, reason: "force_lan", measuredLatencyMs };
+  if (forceNetworkMode === "wan") return { isLan: false, reason: "force_wan", measuredLatencyMs };
+
+  if (forceNetworkMode === "latency") {
+    if (latencyBasedLan) return { isLan: true, reason: "latency_ok", measuredLatencyMs };
+    if (hostnameIntrinsicLan) return { isLan: true, reason: "hostname_intrinsic", measuredLatencyMs };
+    return { isLan: false, reason: "latency_high", measuredLatencyMs };
+  }
+
+  if (hostnameIntrinsicLan) return { isLan: true, reason: "hostname_intrinsic", measuredLatencyMs };
+  if (canTrustClientIp && clientIsLan) return { isLan: true, reason: "client_ip_header", measuredLatencyMs };
+
+  if (latencyBasedLan) return { isLan: true, reason: "latency_ok", measuredLatencyMs };
+
+  if (hostnameRulesLan) return { isLan: true, reason: "hostname_rules", measuredLatencyMs };
+
+  return { isLan: false, reason: "default_wan", measuredLatencyMs };
 };

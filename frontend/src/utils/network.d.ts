@@ -10,6 +10,11 @@ export function classifyNetworkTarget(
   internalDomains?: string,
 ): NetworkTargetType;
 
+export function detectNetworkByLatency(
+  measuredLatencyMs: number,
+  thresholdMs?: number,
+): "lan" | "wan" | "unknown";
+
 export function isInternalNetwork(url: unknown, internalDomains?: string, networkRules?: string): boolean;
 
 export function getNetworkConfig(appConfig?: {
@@ -23,3 +28,16 @@ export function getNetworkConfig(appConfig?: {
   forceNetworkMode: "auto" | "lan" | "wan" | "latency";
   latencyThresholdMs: number;
 };
+
+export function computeEffectiveNetworkMode(
+  hostname: string,
+  clientIp: string,
+  clientIpSource: string,
+  measuredLatencyMs: number,
+  config?: {
+    internalDomains?: string;
+    networkRules?: string;
+    forceNetworkMode?: "auto" | "lan" | "wan" | "latency";
+    latencyThresholdMs?: number;
+  },
+): { isLan: boolean; reason: string; measuredLatencyMs: number };

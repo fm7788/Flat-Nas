@@ -20,7 +20,7 @@ import { useDevice } from "../composables/useDevice";
 import { generateLayout, type GridLayoutItem } from "../utils/gridLayout";
 import type { NavItem, WidgetConfig, NavGroup } from "@/types";
 import OverlayMotion from "@/components/base/OverlayMotion.vue";
-import { isInternalNetwork, getNetworkConfig } from "@/utils/network";
+import { isInternalNetwork, getNetworkConfig, computeEffectiveNetworkMode } from "@/utils/network";
 import DOMPurify from "dompurify";
 const CHUNK_RELOAD_KEY = "flatnas:chunk-reload-at";
 const loadAsync = <T extends Component>(loader: AsyncComponentLoader<T>) =>
@@ -452,17 +452,25 @@ const forceMode = computed({
   },
 });
 const latencyThresholdMs = computed(() => networkConfig.value.latencyThresholdMs);
+const lastKnownClientIp = ref("");
+const lastKnownClientIpSource = ref("");
 
 const effectiveIsLan = computed(() => {
   if (!store.isLanModeInited) return false;
-  if (forceMode.value === "lan") return true;
-  if (forceMode.value === "wan") return false;
-  if (forceMode.value === "latency") {
-    if (isLanMode.value) return true;
-    if (latency.value > 0) return latency.value < latencyThresholdMs.value;
-    return false;
-  }
-  return isLanMode.value;
+  const cfg = networkConfig.value;
+  const result = computeEffectiveNetworkMode(
+    window.location.hostname,
+    lastKnownClientIp.value,
+    lastKnownClientIpSource.value,
+    latency.value,
+    {
+      internalDomains: cfg.internalDomains,
+      networkRules: cfg.networkRules,
+      forceNetworkMode: cfg.forceNetworkMode,
+      latencyThresholdMs: cfg.latencyThresholdMs,
+    },
+  );
+  return result.isLan;
 });
 
 watch(
@@ -1245,6 +1253,23 @@ const checkLatency = async () => {
       }
     }
     latency.value = samples.length > 0 ? Math.min(...samples) : 0;
+
+    if (latency.value > 0) {
+      const cfg = networkConfig.value;
+      const result = computeEffectiveNetworkMode(
+        window.location.hostname,
+        lastKnownClientIp.value,
+        lastKnownClientIpSource.value,
+        latency.value,
+        {
+          internalDomains: cfg.internalDomains,
+          networkRules: cfg.networkRules,
+          forceNetworkMode: cfg.forceNetworkMode,
+          latencyThresholdMs: cfg.latencyThresholdMs,
+        },
+      );
+      isLanMode.value = result.isLan;
+    }
   } finally {
     isChecking.value = false;
   }
@@ -1254,26 +1279,72 @@ watch(forceMode, (val) => {
   if (val === "latency") {
     checkLatency();
   }
+  if (store.isLanModeInited) {
+    const cfg = networkConfig.value;
+    const result = computeEffectiveNetworkMode(
+      window.location.hostname,
+      lastKnownClientIp.value,
+      lastKnownClientIpSource.value,
+      latency.value,
+      {
+        internalDomains: cfg.internalDomains,
+        networkRules: cfg.networkRules,
+        forceNetworkMode: cfg.forceNetworkMode,
+        latencyThresholdMs: cfg.latencyThresholdMs,
+      },
+    );
+    isLanMode.value = result.isLan;
+  }
 });
 watch(latencyThresholdMs, () => {
   if (forceMode.value === "latency") {
     checkLatency();
+  } else if (store.isLanModeInited) {
+    const cfg = networkConfig.value;
+    const result = computeEffectiveNetworkMode(
+      window.location.hostname,
+      lastKnownClientIp.value,
+      lastKnownClientIpSource.value,
+      latency.value,
+      {
+        internalDomains: cfg.internalDomains,
+        networkRules: cfg.networkRules,
+        forceNetworkMode: cfg.forceNetworkMode,
+        latencyThresholdMs: cfg.latencyThresholdMs,
+      },
+    );
+    isLanMode.value = result.isLan;
   }
 });
 
 onMounted(() => {
-  isLanMode.value = isInternalNetwork(
+  const cfg = networkConfig.value;
+  const initialResult = computeEffectiveNetworkMode(
     window.location.hostname,
-    networkConfig.value.internalDomains,
-    networkConfig.value.networkRules,
+    "",
+    "",
+    0,
+    {
+      internalDomains: cfg.internalDomains,
+      networkRules: cfg.networkRules,
+      forceNetworkMode: cfg.forceNetworkMode,
+      latencyThresholdMs: cfg.latencyThresholdMs,
+    },
   );
+  isLanMode.value = initialResult.isLan;
   setTimeout(() => checkLatency(), 2000);
   fetchIp(true);
-  // Poll IP every 1 hour
   ipInterval = window.setInterval(() => fetchIp(), 3600000);
-  nextTick(() => {
-    searchInputRef.value?.focus();
-  });
+  const ensureSearchFocus = () => {
+    nextTick(() => {
+      if (searchInputRef.value) {
+        searchInputRef.value.focus();
+      } else {
+        setTimeout(ensureSearchFocus, 200);
+      }
+    });
+  };
+  ensureSearchFocus();
 });
 
 let gridPostInitReady = false;
@@ -2517,15 +2588,22 @@ const fetchIp = async (force = false) => {
         const { timestamp, data } = JSON.parse(cached);
         if (Date.now() - timestamp < CACHE_DURATION) {
           ipInfo.value = data;
-          const { internalDomains, networkRules } = networkConfig.value;
-          const hostnameIntrinsicLan = isInternalNetwork(window.location.hostname);
-          const hostnameRulesLan = isInternalNetwork(window.location.hostname, internalDomains, networkRules);
-          const canTrustClientIp = data?.clientIpSource === "header";
-          const clientIsLan =
-            canTrustClientIp &&
-            !!data?.clientIp &&
-            isInternalNetwork(String(data.clientIp), internalDomains, networkRules);
-          isLanMode.value = hostnameIntrinsicLan || (canTrustClientIp ? clientIsLan : hostnameRulesLan);
+          lastKnownClientIp.value = data?.clientIp || "";
+          lastKnownClientIpSource.value = data?.clientIpSource || "";
+          const cfg = networkConfig.value;
+          const result = computeEffectiveNetworkMode(
+            window.location.hostname,
+            lastKnownClientIp.value,
+            lastKnownClientIpSource.value,
+            latency.value,
+            {
+              internalDomains: cfg.internalDomains,
+              networkRules: cfg.networkRules,
+              forceNetworkMode: cfg.forceNetworkMode,
+              latencyThresholdMs: cfg.latencyThresholdMs,
+            },
+          );
+          isLanMode.value = result.isLan;
           store.ipFetchStatus = "success";
           store.isLanModeInited = true;
           return;
@@ -2577,16 +2655,23 @@ const fetchIp = async (force = false) => {
       ipInfo.value.location = data.location || "未知位置";
       ipInfo.value.clientIp = data.clientIp || "";
       ipInfo.value.clientIpSource = data.clientIpSource || "";
+      lastKnownClientIp.value = ipInfo.value.clientIp;
+      lastKnownClientIpSource.value = ipInfo.value.clientIpSource;
 
-      const { internalDomains, networkRules } = networkConfig.value;
-      const hostnameIntrinsicLan = isInternalNetwork(window.location.hostname);
-      const hostnameRulesLan = isInternalNetwork(window.location.hostname, internalDomains, networkRules);
-      const canTrustClientIp = ipInfo.value.clientIpSource === "header";
-      const clientIsLan =
-        canTrustClientIp &&
-        !!ipInfo.value.clientIp &&
-        isInternalNetwork(String(ipInfo.value.clientIp), internalDomains, networkRules);
-      isLanMode.value = hostnameIntrinsicLan || (canTrustClientIp ? clientIsLan : hostnameRulesLan);
+      const cfg = networkConfig.value;
+      const result = computeEffectiveNetworkMode(
+        window.location.hostname,
+        lastKnownClientIp.value,
+        lastKnownClientIpSource.value,
+        latency.value,
+        {
+          internalDomains: cfg.internalDomains,
+          networkRules: cfg.networkRules,
+          forceNetworkMode: cfg.forceNetworkMode,
+          latencyThresholdMs: cfg.latencyThresholdMs,
+        },
+      );
+      isLanMode.value = result.isLan;
       store.ipFetchStatus = "success";
     } else {
       ipInfo.value.displayIp = data.ip || "获取失败";

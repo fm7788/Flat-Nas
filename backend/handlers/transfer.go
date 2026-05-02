@@ -579,6 +579,70 @@ func UploadComplete(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"success": true, "item": item})
 }
 
+func UploadStatus(c *gin.Context) {
+	uploadId := c.Query("uploadId")
+	if uploadId == "" || !isValidUploadID(uploadId) {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Missing or invalid upload ID"})
+		return
+	}
+
+	username := c.GetString("username")
+	userDir := getUserUploadsDir(username)
+	sessionFile := filepath.Join(userDir, uploadId+".json")
+
+	var session UploadSession
+	if err := utils.ReadJSON(sessionFile, &session); err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "Session not found"})
+		return
+	}
+	if session.Username != username {
+		c.JSON(http.StatusForbidden, gin.H{"error": "Permission denied"})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"success":     true,
+		"uploadId":    session.UploadID,
+		"totalChunks": session.TotalChunks,
+		"chunkSize":   session.ChunkSize,
+		"uploaded":    session.Uploaded,
+	})
+}
+
+func UploadCancel(c *gin.Context) {
+	var req struct {
+		UploadId string `json:"uploadId"`
+	}
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid JSON"})
+		return
+	}
+	if !isValidUploadID(req.UploadId) {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid upload ID"})
+		return
+	}
+
+	username := c.GetString("username")
+	userDir := getUserUploadsDir(username)
+	sessionFile := filepath.Join(userDir, req.UploadId+".json")
+
+	var session UploadSession
+	if err := utils.ReadJSON(sessionFile, &session); err != nil {
+		c.JSON(http.StatusOK, gin.H{"success": true, "message": "Already cleaned up"})
+		return
+	}
+	if session.Username != username {
+		c.JSON(http.StatusForbidden, gin.H{"error": "Permission denied"})
+		return
+	}
+
+	chunkDir := filepath.Join(userDir, req.UploadId+"_chunks")
+	os.RemoveAll(chunkDir)
+	os.Remove(sessionFile)
+
+	c.JSON(http.StatusOK, gin.H{"success": true, "message": "Upload cancelled"})
+}
+
 func DownloadToken(c *gin.Context) {
 	var body struct {
 		Url string `json:"url"`

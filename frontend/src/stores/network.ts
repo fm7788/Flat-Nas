@@ -22,6 +22,13 @@ export const useNetworkStore = defineStore("network", () => {
   let isNetworkSyncActive = true;
   const lastPingAt = ref(0);
 
+  const markFresh = () => { lastPingAt.value = Date.now(); };
+  const markStale = () => { lastPingAt.value = 0; };
+  const isStale = (thresholdMs = 20000) => {
+    if (lastPingAt.value <= 0) return true;
+    return (Date.now() - lastPingAt.value) > thresholdMs;
+  };
+
   const getHeaders = (): Record<string, string> => {
     const headers: Record<string, string> = { "Content-Type": "application/json" };
     if (auth.token) headers["Authorization"] = `Bearer ${auth.token}`;
@@ -379,6 +386,7 @@ export const useNetworkStore = defineStore("network", () => {
 
   return {
     lastPingAt, isNetworkSyncActive, lastNetworkHeartbeatAt,
+    markFresh, markStale, isStale,
     startNetworkHeartbeat, stopNetworkHeartbeat,
     getHeartbeatInterval, getHeartbeatTimeout, getHeartbeatCheckInterval,
     detectWeatherNetworkStatus, initEventBindings,

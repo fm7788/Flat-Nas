@@ -7,6 +7,7 @@ import { useDevice } from "@/composables/useDevice";
 import { acquireObjectUrl, releaseObjectUrl, touchObjectUrl } from "@/utils/objectUrlRuntime";
 import { toBackendUrl } from "@/utils/runtimeUrls";
 import OverlayMotion from "@/components/base/OverlayMotion.vue";
+import { ChunkedUploader } from "@/utils/chunkedUploader";
 
 type TransferItem =
   | { id: string; type: "text"; timestamp: number; content: string }
@@ -122,12 +123,24 @@ const groupedChatItems = computed<ChatGroup[]>(() => {
 
 const selectedIds = ref<Record<string, boolean>>({});
 const selectedCount = computed(() => Object.values(selectedIds.value).filter(Boolean).length);
+const allItemIds = computed(() => sortedChatItems.value.map((it) => it.id));
+const isAllSelected = computed(() => allItemIds.value.length > 0 && selectedCount.value === allItemIds.value.length);
 
 const setSelected = (id: string, v: boolean) => {
   const next = { ...selectedIds.value };
   if (v) next[id] = true;
   else delete next[id];
   selectedIds.value = next;
+};
+
+const toggleSelectAll = () => {
+  if (isAllSelected.value) {
+    selectedIds.value = {};
+  } else {
+    const next: Record<string, boolean> = {};
+    allItemIds.value.forEach((id) => { next[id] = true; });
+    selectedIds.value = next;
+  }
 };
 
 const toggleSelected = (id: string) => setSelected(id, !selectedIds.value[id]);
@@ -597,16 +610,26 @@ const startNextUploads = () => {
 };
 
 const pauseUpload = (q: UploadQueueItem) => {
-  if (q.abort) q.abort.abort();
-  q.abort = undefined;
+  const uploader = activeUploaders.get(q.id);
+  if (uploader) {
+    void uploader.pause("user_action");
+  } else if (q.abort) {
+    q.abort.abort();
+    q.abort = undefined;
+  }
   if (q.status === "uploading") q.status = "paused";
 };
 
 const resumeUpload = (q: UploadQueueItem) => {
   if (q.status !== "paused" && q.status !== "failed") return;
-  q.status = "queued";
-  q.error = undefined;
-  startNextUploads();
+  const uploader = activeUploaders.get(q.id);
+  if (uploader) {
+    void uploader.resume();
+  } else {
+    q.status = "queued";
+    q.error = undefined;
+    startNextUploads();
+  }
 };
 
 const removeQueueItem = (q: UploadQueueItem) => {
@@ -614,118 +637,65 @@ const removeQueueItem = (q: UploadQueueItem) => {
   queue.value = queue.value.filter((x) => x.id !== q.id);
 };
 
+const activeUploaders = new Map<string, ChunkedUploader>();
+
 const uploadQueueItem = async (q: UploadQueueItem) => {
   uploadingCount.value += 1;
   q.status = "uploading";
   q.progress = Math.max(0, Math.min(1, q.progress || 0));
   q.error = undefined;
 
-  const controller = new AbortController();
-  q.abort = controller;
+  const uploader = new ChunkedUploader(store.getHeaders, {
+    onProgress: (bytesUploaded, totalBytes, uploadedChunks, totalChunks) => {
+      q.progress = Math.max(0, Math.min(1, bytesUploaded / totalBytes));
+    },
+    onComplete: async (result) => {
+      const newItem = result.item as TransferItem | undefined;
+      if (newItem) {
+        if (!items.value.some((x) => x.id === newItem.id)) {
+          items.value = [newItem, ...items.value].slice(0, 200);
+        }
+      } else {
+        await fetchItems();
+      }
+
+      q.status = "completed";
+      q.progress = 1;
+      activeUploaders.delete(q.id);
+      queue.value = queue.value.filter((x) => x.id !== q.id);
+      uploadingCount.value = Math.max(0, uploadingCount.value - 1);
+      startNextUploads();
+    },
+    onError: (err) => {
+      const msg = err.message || "上传失败";
+      q.status = "failed";
+      q.error = msg;
+      activeUploaders.delete(q.id);
+      uploadingCount.value = Math.max(0, uploadingCount.value - 1);
+      startNextUploads();
+    },
+    onPause: (reason) => {
+      if (q.status === "uploading") q.status = "paused";
+      if (reason === "network_error") {
+        q.error = "网络中断，等待恢复";
+      }
+    },
+    onResume: () => {
+      q.status = "uploading";
+      q.error = undefined;
+    },
+  });
+
+  activeUploaders.set(q.id, uploader);
 
   try {
-    const chunkSize = 5 * 1024 * 1024;
-    const initRes = await fetch("/api/transfer/upload/init", {
-      method: "POST",
-      headers: store.getHeaders(),
-      body: JSON.stringify({
-        fileName: q.file.name,
-        size: q.file.size,
-        mime: q.file.type || "",
-        fileKey: fileKeyFor(q.file),
-        chunkSize,
-      }),
-      signal: controller.signal,
-    });
-    const initData = await initRes.json().catch(() => ({}));
-    if (!initRes.ok || !initData.success) {
-      throw new Error(initData.error || `HTTP ${initRes.status}`);
-    }
-
-    const uploadId = String(initData.uploadId || "");
-    const effectiveChunkSize = Number(initData.chunkSize || chunkSize);
-    const totalChunks = Number(initData.totalChunks || 0);
-    const uploaded = new Set<number>(
-      Array.isArray(initData.uploaded) ? initData.uploaded.map((n: unknown) => Number(n)) : [],
-    );
-
-    if (!uploadId || !Number.isFinite(totalChunks) || totalChunks <= 0) {
-      throw new Error("上传初始化失败");
-    }
-
-    let doneBytes = 0;
-    if (uploaded.size) {
-      doneBytes = Math.min(q.file.size, uploaded.size * effectiveChunkSize);
-      q.progress = doneBytes / q.file.size;
-    }
-
-    for (let i = 0; i < totalChunks; i++) {
-      if (uploaded.has(i)) continue;
-      const start = i * effectiveChunkSize;
-      const end = Math.min(q.file.size, start + effectiveChunkSize);
-      const blob = q.file.slice(start, end);
-
-      let attempt = 0;
-      while (true) {
-        attempt += 1;
-        try {
-          const form = new FormData();
-          form.append("uploadId", uploadId);
-          form.append("index", String(i));
-          form.append("chunk", blob, `${q.file.name}.part`);
-
-          const r = await fetch("/api/transfer/upload/chunk", {
-            method: "POST",
-            headers: authHeaderOnly(),
-            body: form,
-            signal: controller.signal,
-          });
-          const d = await r.json().catch(() => ({}));
-          if (!r.ok || !d.success) throw new Error(d.error || `HTTP ${r.status}`);
-          doneBytes += blob.size;
-          q.progress = Math.max(0, Math.min(1, doneBytes / q.file.size));
-          break;
-        } catch (e: unknown) {
-          if (controller.signal.aborted) throw e;
-          if (attempt >= 3) throw e;
-          await new Promise((resolve) => setTimeout(resolve, 300 * attempt));
-        }
-      }
-    }
-
-    const completeRes = await fetch("/api/transfer/upload/complete", {
-      method: "POST",
-      headers: store.getHeaders(),
-      body: JSON.stringify({ uploadId }),
-      signal: controller.signal,
-    });
-    const completeData = await completeRes.json().catch(() => ({}));
-    if (!completeRes.ok || !completeData.success) {
-      throw new Error(completeData.error || `HTTP ${completeRes.status}`);
-    }
-
-    q.status = "completed";
-    q.progress = 1;
-    const newItem = completeData.item as TransferItem | undefined;
-    if (newItem) {
-      if (!items.value.some((x) => x.id === newItem.id)) {
-        items.value = [newItem, ...items.value].slice(0, 200);
-      }
-    } else {
-      await fetchItems();
-    }
-
-    queue.value = queue.value.filter((x) => x.id !== q.id);
+    await uploader.start(q.file);
   } catch (e: unknown) {
-    if (controller.signal.aborted) {
-      if (q.status === "uploading") q.status = "paused";
-    } else {
-      const msg = e instanceof Error ? e.message : String(e);
+    if (q.status === "uploading") {
       q.status = "failed";
-      q.error = msg || "上传失败";
+      q.error = e instanceof Error ? e.message : "上传失败";
     }
-  } finally {
-    if (q.abort === controller) q.abort = undefined;
+    activeUploaders.delete(q.id);
     uploadingCount.value = Math.max(0, uploadingCount.value - 1);
     startNextUploads();
   }
@@ -1228,6 +1198,18 @@ onBeforeUnmount(() => {
           "
         >
           {{ multiSelectMode ? "退出多选" : "多选" }}
+        </button>
+        <button
+          v-if="multiSelectMode"
+          class="w-full text-left px-2.5 py-1.5 text-[13px] hover:bg-white/10 transition-colors text-white"
+          @click="
+            () => {
+              closeContextMenu();
+              toggleSelectAll();
+            }
+          "
+        >
+          {{ isAllSelected ? "取消全选" : "全选" }}
         </button>
         <button
           class="w-full text-left px-2.5 py-1.5 text-[13px] hover:bg-white/10 transition-colors"

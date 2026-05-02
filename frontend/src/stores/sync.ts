@@ -22,6 +22,7 @@ export const useSyncStore = defineStore("sync", () => {
   const networkStore = useNetworkStore();
 
   // ---- WebSocket ----
+  const lastWsUrl = ref("");
   const wsUrl = computed(() => {
     if (typeof window === "undefined") return "";
     // In dev mode, connect directly to backend WS port to avoid Vite proxy issues
@@ -34,20 +35,97 @@ export const useSyncStore = defineStore("sync", () => {
     }
     return toWsUrl("/ws");
   });
+
+  const trackWsUrlChange = (url: string) => {
+    if (url && url !== lastWsUrl.value) {
+      lastWsUrl.value = url;
+    }
+  };
+
   const { status, data: wsRawData, send: wsSendRaw, open: wsOpen, close: wsClose } = useWebSocket(
     () => wsUrl.value,
     {
       autoReconnect: {
         retries: Infinity,
         delay: (attempt: number) => {
+          if (attempt <= 3) return 500 * (attempt + 1);
           const base = Math.min(1000 * Math.pow(2, Math.min(attempt, 15)), 30000);
           const jitter = base * 0.2 * (Math.random() * 2 - 1);
           return base + jitter;
         },
+        onFailed: () => {
+          console.warn("[WS] Auto-reconnect exhausted, marking network as stale");
+          networkStore.markStale();
+        },
       },
       immediate: false,
+      heartbeat: {
+        message: JSON.stringify({ type: "ping" }),
+        interval: 15000,
+        pongTimeout: 8000,
+      },
+      onConnected: (ws) => {
+        if (ws?.url) trackWsUrlChange(ws.url);
+        wsContinuousFailures = 0;
+        networkStore.markFresh();
+      },
+      onDisconnected: () => {
+        wsContinuousFailures++;
+        if (wsContinuousFailures > 6) {
+          console.warn(`[WS] ${wsContinuousFailures} consecutive disconnections, scheduling immediate sync`);
+          syncStore.scheduleImmediateSync();
+        }
+      },
     },
   );
+
+  let wsHealthCheckTimer: ReturnType<typeof setInterval> | null = null;
+
+  const startWsHealthCheck = () => {
+    if (wsHealthCheckTimer) return;
+    wsHealthCheckTimer = setInterval(() => {
+      if (!auth.isLogged || status.value !== "OPEN") return;
+      if (networkStore.isStale(30000)) {
+        const elapsed = Date.now() - networkStore.lastPingAt;
+        console.warn(`[WS] Health check: pong stale for ${elapsed}ms, forcing reconnect`);
+        forceWsReconnect();
+      }
+    }, 10000);
+  };
+
+  const stopWsHealthCheck = () => {
+    if (wsHealthCheckTimer) {
+      clearInterval(wsHealthCheckTimer);
+      wsHealthCheckTimer = null;
+    }
+  };
+
+  const forceWsReconnect = () => {
+    if (!auth.isLogged) return;
+    const currentUrl = wsUrl.value;
+    if (!currentUrl) return;
+    console.log(`[WS] Force reconnect: currentUrl=${currentUrl}`);
+    lastWsUrl.value = currentUrl;
+    stopWsHealthCheck();
+    networkStore.markStale();
+    wsClose();
+    setTimeout(() => {
+      if (auth.isLogged) {
+        wsOpen();
+        startWsHealthCheck();
+      }
+    }, 2000);
+  };
+
+  const getWsNetworkSignature = (): { url: string; hostname: string; isDev: boolean } => {
+    const current = wsUrl.value;
+    try {
+      const parsed = new URL(current);
+      return { url: current, hostname: parsed.hostname, isDev: import.meta.env.DEV };
+    } catch {
+      return { url: current, hostname: "", isDev: import.meta.env.DEV };
+    }
+  };
 
   const wsSend = (message: Record<string, unknown>) => {
     if (status.value === "OPEN") wsSendRaw(JSON.stringify(message));
@@ -299,6 +377,7 @@ export const useSyncStore = defineStore("sync", () => {
       wsWasConnectedBefore = true;
       if (auth.isLogged && auth.token) wsSend({ type: "auth", payload: { token: auth.token } });
       networkStore.startNetworkHeartbeat(wsSend);
+      startWsHealthCheck();
       if (isFirstConnect) return;
       try {
         const serverVersion = await fetchVersionOnly();
@@ -465,7 +544,7 @@ export const useSyncStore = defineStore("sync", () => {
   // ---- Watches ----
   watch(() => configStore.forceNetworkMode, (mode, prev) => {
     if (!mode || mode === prev) return;
-    const ok = ["auto","lan","wan","latency"].includes(mode);
+    const ok = ["auto", "lan", "wan", "latency"].includes(mode);
     if (!ok) return;
     if (isConnected.value) { networkStore.stopNetworkHeartbeat(); networkStore.startNetworkHeartbeat(wsSend); }
   });
@@ -487,10 +566,20 @@ export const useSyncStore = defineStore("sync", () => {
   watch(widgetsStore.widgets, markDirtyIfActive, { deep: true });
   watch(rssFeeds, markDirtyIfActive, { deep: true });
   watch(rssCategories, markDirtyIfActive, { deep: true });
-  watch(status, (newStatus) => { if (newStatus === "OPEN") { networkStore.lastPingAt = Date.now(); startPingCheck(); } else { stopPingCheck(); } });
+  watch(status, (newStatus) => { if (newStatus === "OPEN") { networkStore.lastPingAt = Date.now(); startPingCheck(); } else { stopPingCheck(); stopWsHealthCheck(); } });
+
+  watch(wsUrl, (newUrl, oldUrl) => {
+    if (!newUrl || !oldUrl || newUrl === oldUrl) return;
+    if (!auth.isLogged) return;
+    const wasConnected = status.value === "OPEN";
+    console.log(`[WS] URL changed: ${oldUrl} -> ${newUrl}, wasConnected=${wasConnected}`);
+    if (wasConnected) {
+      forceWsReconnect();
+    }
+  });
 
   return {
-    status, wsRawData, wsSend, wsSendRaw, wsOpen, isConnected,
+    status, wsRawData, wsSend, wsSendRaw, wsOpen, isConnected, forceWsReconnect,
     dataVersion, pendingServerVersion, rssFeeds, rssCategories, luckyStunData,
     isSaving: saveStore.isSaving, hasPendingSave: saveStore.hasPendingSave, hasUnsavedChanges: saveStore.hasUnsavedChanges,
     markDirty: saveStore.markDirty, saveData, resolveConflict,

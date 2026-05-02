@@ -180,6 +180,7 @@ const toggleStyle = () => {
   const next = styles[(idx + 1) % styles.length];
   props.widget.data.style = next;
   store.markDirty();
+  void store.saveData();
 };
 
 const nextMonth = () => {

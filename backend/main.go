@@ -348,6 +348,8 @@ func main() {
 			authorized.POST("/transfer/upload/init", handlers.UploadInit)
 			authorized.POST("/transfer/upload/chunk", handlers.UploadChunk)
 			authorized.POST("/transfer/upload/complete", handlers.UploadComplete)
+			authorized.GET("/transfer/upload/status", handlers.UploadStatus)
+			authorized.POST("/transfer/upload/cancel", handlers.UploadCancel)
 			authorized.POST("/transfer/download-token", handlers.DownloadToken)
 			authorized.DELETE("/transfer/items/:id", handlers.DeleteItem)
 			authorized.POST("/transfer/generate-thumb/:filename/:size", handlers.GenerateThumb)

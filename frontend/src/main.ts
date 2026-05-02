@@ -6,6 +6,7 @@ import App from "./App.vue";
 import { useMainStore } from "./stores/main";
 import { attachErrorCapture, ensureOverlayHandled } from "./utils/overlay";
 import { installFetchUrlPatch } from "./utils/runtimeUrls";
+import { installNetworkFetchPatch } from "./utils/networkFetch";
 
 if (typeof document !== "undefined" && typeof navigator !== "undefined") {
   const ua = navigator.userAgent || "";
@@ -21,6 +22,7 @@ if (typeof document !== "undefined" && typeof navigator !== "undefined") {
 }
 
 installFetchUrlPatch();
+installNetworkFetchPatch();
 
 const app = createApp(App);
 const pinia = createPinia();
