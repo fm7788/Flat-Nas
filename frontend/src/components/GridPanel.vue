@@ -2486,45 +2486,54 @@ const fetchHitokoto = async () => {
   }
 };
 
-// --- 修复 IP 获取报错 ---
+// --- IP 组件 ---
 let ipInterval: number | null = null;
 const ipInfo = ref({
-  displayIp: "加载中...",
-  realIp: "",
+  wanIp: "",
+  lanIp: "",
   location: "",
-  isProxy: false,
-  baiduLatency: "--",
-  details: [] as string[], // 用于存储所有检测到的 IP
   clientIp: "",
   clientIpSource: "",
+  baiduLatency: "--",
 });
 
-const isIpv6 = computed(() => {
-  const ip = String(ipInfo.value.displayIp || "");
-  return ip.includes(":");
+const hasWanIp = computed(() => {
+  const v = String(ipInfo.value.wanIp || "").trim();
+  return !!v && v !== "Error" && v !== "获取失败";
 });
 
-const hasClientIp = computed(() => {
-  const v = String(ipInfo.value.clientIp || "").trim();
+const hasLanIp = computed(() => {
+  const v = String(ipInfo.value.lanIp || "").trim();
   return !!v;
 });
 
-const showClientIp = computed(() => {
-  if (!hasClientIp.value) return false;
-  const display = String(ipInfo.value.displayIp || "").trim();
-  const client = String(ipInfo.value.clientIp || "").trim();
-  if (!display || !client) return false;
-  return client !== display;
+const displayIp = computed(() => {
+  if (hasWanIp.value) return ipInfo.value.wanIp;
+  if (hasLanIp.value) return ipInfo.value.lanIp;
+  return "加载中...";
 });
 
-const ipTypeLabel = computed(() => (isIpv6.value ? "IPv6" : "IP"));
+const isIpv6 = computed(() => {
+  const ip = String(displayIp.value || "");
+  return ip.includes(":");
+});
+
+const ipTypeLabel = computed(() => {
+  if (!hasWanIp.value && hasLanIp.value) return "内网 IP";
+  return isIpv6.value ? "IPv6" : "外网 IP";
+});
+
+const showClientIp = computed(() => {
+  if (!ipInfo.value.clientIp) return false;
+  return ipInfo.value.clientIp !== ipInfo.value.wanIp;
+});
 
 const copiedToast = ref("");
 let copiedToastTimer: number | null = null;
 const copyToClipboard = async (text: string) => {
   const value = String(text || "").trim();
   if (!value) return;
-  if (value === "加载中..." || value === "检测中..." || value === "Error" || value === "获取失败")
+  if (value === "加载中..." || value === "检测中..." || value === "Error")
     return;
   try {
     await navigator.clipboard.writeText(value);
@@ -2615,14 +2624,12 @@ const fetchIp = async (force = false) => {
   }
 
   ipInfo.value = {
-    displayIp: "检测中...",
-    realIp: "",
+    wanIp: "",
+    lanIp: "",
     location: "",
-    isProxy: false,
-    baiduLatency: "...",
-    details: [],
     clientIp: "",
     clientIpSource: "",
+    baiduLatency: "...",
   };
 
   // 检测 223.5.5.5 延迟 (通过后端 /api/ping)
@@ -2651,7 +2658,8 @@ const fetchIp = async (force = false) => {
     const data = await res.json();
 
     if (data.success) {
-      ipInfo.value.displayIp = data.ip;
+      ipInfo.value.wanIp = data.ip || "";
+      ipInfo.value.lanIp = data.clientIp || "";
       ipInfo.value.location = data.location || "未知位置";
       ipInfo.value.clientIp = data.clientIp || "";
       ipInfo.value.clientIpSource = data.clientIpSource || "";
@@ -2674,7 +2682,8 @@ const fetchIp = async (force = false) => {
       isLanMode.value = result.isLan;
       store.ipFetchStatus = "success";
     } else {
-      ipInfo.value.displayIp = data.ip || "获取失败";
+      ipInfo.value.wanIp = data.ip || "";
+      ipInfo.value.lanIp = data.clientIp || "";
       ipInfo.value.location = "未知位置";
       ipInfo.value.clientIp = data.clientIp || "";
       ipInfo.value.clientIpSource = data.clientIpSource || "";
@@ -2685,7 +2694,7 @@ const fetchIp = async (force = false) => {
     updateCache();
   } catch (e) {
     console.error("IP Fetch Error", e);
-    ipInfo.value.displayIp = "Error";
+    ipInfo.value.wanIp = "";
     isLanMode.value = initialIsLanMode;
     store.ipFetchStatus = "error";
     store.isLanModeInited = true;
@@ -2694,8 +2703,7 @@ const fetchIp = async (force = false) => {
 };
 
 const updateCache = () => {
-  // Only cache if we have some meaningful data
-  if (ipInfo.value.displayIp !== "检测中..." && ipInfo.value.baiduLatency !== "...") {
+  if (ipInfo.value.baiduLatency !== "...") {
     localStorage.setItem(
       `flatnas_ip_cache:${networkScope}`,
       JSON.stringify({
@@ -2706,7 +2714,7 @@ const updateCache = () => {
   }
 };
 
-// --- 修复结束 ---
+// --- IP 组件结束 ---
 
 // Visitor Stats
 const onlineDuration = ref("00:00:00");
@@ -3339,39 +3347,36 @@ onUnmounted(() => {
               }"
             >
               <div
-                v-if="ipInfo.location"
+                v-if="ipInfo.location && ipInfo.location !== '未知位置'"
                 class="text-[19px] font-medium sm:font-bold w-full truncate flex-1 flex items-center justify-center -mt-px"
                 :title="ipInfo.location"
               >
                 {{ formattedLocation }}
               </div>
-              <div class="flex items-center justify-center gap-2 w-full flex-1">
-                <span class="text-[14px] opacity-70 uppercase">{{ ipTypeLabel }}</span>
+              <div v-if="hasWanIp" class="flex items-center justify-center gap-2 w-full flex-1">
+                <span class="text-[12px] opacity-70 uppercase">外网</span>
                 <button
-                  class="max-w-full font-mono font-medium sm:font-bold leading-tight text-center select-text break-all hover:opacity-90 transition-opacity"
-                  :class="isIpv6 ? 'text-[18px] sm:text-xl' : 'text-2xl'"
+                  class="max-w-full font-mono font-medium sm:font-bold leading-tight text-center select-text break-all hover:opacity-90 transition-opacity text-xl"
                   type="button"
-                  :title="isIpv6 ? '点击复制完整 IPv6' : '点击复制 IP'"
-                  @click.stop="copyToClipboard(ipInfo.displayIp)"
+                  title="点击复制外网 IP"
+                  @click.stop="copyToClipboard(ipInfo.wanIp)"
                 >
-                  {{ ipInfo.displayIp }}
+                  {{ ipInfo.wanIp }}
                 </button>
               </div>
-
-              <div
-                v-if="showClientIp"
-                class="flex items-center justify-center gap-2 w-full -mt-1"
-                :title="`客户端IP来源: ${ipInfo.clientIpSource || '-'}`"
-              >
-                <span class="text-[11px] opacity-70 uppercase">CLIENT</span>
+              <div v-if="hasLanIp" class="flex items-center justify-center gap-2 w-full flex-1">
+                <span class="text-[10px] opacity-50 uppercase">内网</span>
                 <button
-                  class="max-w-full text-[12px] font-mono font-medium opacity-90 select-text break-all hover:opacity-100 transition-opacity"
+                  class="max-w-full font-mono font-medium leading-tight text-center select-text break-all opacity-70 hover:opacity-90 transition-opacity text-sm"
                   type="button"
-                  title="点击复制客户端 IP"
-                  @click.stop="copyToClipboard(ipInfo.clientIp)"
+                  title="点击复制内网 IP"
+                  @click.stop="copyToClipboard(ipInfo.lanIp)"
                 >
-                  {{ ipInfo.clientIp }}
+                  {{ ipInfo.lanIp }}
                 </button>
+              </div>
+              <div v-if="!hasWanIp && !hasLanIp" class="flex items-center justify-center gap-2 w-full flex-1">
+                <span class="text-2xl font-mono opacity-60">{{ displayIp }}</span>
               </div>
 
               <div class="flex items-center justify-center gap-2 w-full flex-1">
