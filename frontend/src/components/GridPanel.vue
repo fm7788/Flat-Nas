@@ -2565,17 +2565,28 @@ const copyToClipboard = async (text: string) => {
 const formattedLocation = computed(() => {
   const loc = ipInfo.value.location;
   if (!loc) return "";
-  const parts = loc.split(" ");
-  let area = parts[0] || "";
-  let isp = parts.length > 1 ? parts[1] : "";
+  const parts = loc.split(" ").filter((p) => p.trim());
+  if (parts.length === 0) return "";
 
-  // Remove Province (e.g., "浙江省")
+  let isp = "";
+  let area = "";
+
+  if (parts.length >= 2) {
+    const lastPart = parts[parts.length - 1];
+    const isIsp = /[a-zA-Z]/.test(lastPart) || /电信|联通|移动|铁通|网通|教育|科技|信息|网络|数据|通信|广播|电视|有线|公司/.test(lastPart);
+    if (isIsp) {
+      isp = lastPart;
+      area = parts.slice(0, parts.length - 1).join(" ");
+    } else {
+      area = parts.join(" ");
+    }
+  } else {
+    area = parts[0];
+  }
+
   area = area.replace(/^.+?省/, "");
-
-  // Remove City if it's not the last part (e.g., "宁波市慈溪市" -> "慈溪市")
   area = area.replace(/^.+?市(?=.+)/, "");
 
-  // Clean ISP (e.g., "电信ADSL" -> "电信")
   if (isp) {
     isp = isp.replace(/ADSL|宽带|光纤/gi, "");
   }

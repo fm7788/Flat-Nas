@@ -308,6 +308,7 @@ type IPInfo struct {
 	City    string
 	Region  string
 	Country string
+	Isp     string
 }
 
 var globalIPCache IPCache
@@ -353,6 +354,9 @@ func fetchIPFromProvider(provider string) (*IPInfo, error) {
 		if country, ok := result["country"].(string); ok {
 			info.Country = country
 		}
+		if isp, ok := result["isp"].(string); ok {
+			info.Isp = isp
+		}
 		return info, nil
 
 	case "ipwhois":
@@ -379,6 +383,11 @@ func fetchIPFromProvider(provider string) (*IPInfo, error) {
 		if country, ok := result["country"].(string); ok {
 			info.Country = country
 		}
+		if isp, ok := result["connection"].(map[string]interface{}); ok {
+			if org, exists := isp["org"].(string); exists {
+				info.Isp = org
+			}
+		}
 		return info, nil
 
 	case "ipapi-co":
@@ -404,6 +413,9 @@ func fetchIPFromProvider(provider string) (*IPInfo, error) {
 		}
 		if country, ok := result["country_name"].(string); ok {
 			info.Country = country
+		}
+		if isp, ok := result["org"].(string); ok {
+			info.Isp = isp
 		}
 		return info, nil
 
@@ -450,11 +462,21 @@ func fetchIPAndCache() bool {
 			continue
 		}
 		if info.City != "" {
+			location := info.City
+			if info.Region != "" {
+				location = info.Region + " " + location
+			}
+			if info.Country != "" {
+				location = info.Country + " " + location
+			}
+			if info.Isp != "" {
+				location = location + " " + info.Isp
+			}
 			globalIPCache.Mutex.Lock()
 			globalIPCache.City = info.City
 			globalIPCache.Region = info.Region
 			globalIPCache.Country = info.Country
-			globalIPCache.Location = info.Country + " " + info.Region + " " + info.City
+			globalIPCache.Location = location
 			globalIPCache.Updated = time.Now()
 			globalIPCache.Mutex.Unlock()
 			log.Printf("[IPFetcher] Success via %s: %s", provider, info.City)
