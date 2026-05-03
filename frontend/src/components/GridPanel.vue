@@ -2576,9 +2576,9 @@ const formattedLocation = computed(() => {
     const isIsp = /[a-zA-Z]/.test(lastPart) || /电信|联通|移动|铁通|网通|教育|科技|信息|网络|数据|通信|广播|电视|有线|公司/.test(lastPart);
     if (isIsp) {
       isp = lastPart;
-      area = parts.slice(0, parts.length - 1).join(" ");
+      area = parts[parts.length - 2] || "";
     } else {
-      area = parts.join(" ");
+      area = parts[parts.length - 1];
     }
   } else {
     area = parts[0];
@@ -2591,7 +2591,7 @@ const formattedLocation = computed(() => {
     isp = isp.replace(/ADSL|宽带|光纤/gi, "");
   }
 
-  return `${area} ${isp}`.trim();
+  return area.trim();
 });
 
 const fetchIp = async (force = false) => {

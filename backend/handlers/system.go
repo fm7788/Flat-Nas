@@ -305,6 +305,7 @@ type IPCache struct {
 
 // IPInfo is a unified struct for IP provider responses
 type IPInfo struct {
+	IP      string
 	City    string
 	Region  string
 	Country string
@@ -345,6 +346,9 @@ func fetchIPFromProvider(provider string) (*IPInfo, error) {
 			return nil, fmt.Errorf("ip-api: status fail")
 		}
 		info := &IPInfo{}
+		if query, ok := result["query"].(string); ok {
+			info.IP = query
+		}
 		if city, ok := result["city"].(string); ok {
 			info.City = city
 		}
@@ -374,6 +378,9 @@ func fetchIPFromProvider(provider string) (*IPInfo, error) {
 			return nil, fmt.Errorf("ipwhois: not success")
 		}
 		info := &IPInfo{}
+		if ip, ok := result["ip"].(string); ok {
+			info.IP = ip
+		}
 		if city, ok := result["city"].(string); ok {
 			info.City = city
 		}
@@ -405,6 +412,9 @@ func fetchIPFromProvider(provider string) (*IPInfo, error) {
 			return nil, fmt.Errorf("ipapi.co: %s", reason)
 		}
 		info := &IPInfo{}
+		if ip, ok := result["ip"].(string); ok {
+			info.IP = ip
+		}
 		if city, ok := result["city"].(string); ok {
 			info.City = city
 		}
@@ -473,6 +483,7 @@ func fetchIPAndCache() bool {
 				location = location + " " + info.Isp
 			}
 			globalIPCache.Mutex.Lock()
+			globalIPCache.IP = info.IP
 			globalIPCache.City = info.City
 			globalIPCache.Region = info.Region
 			globalIPCache.Country = info.Country
