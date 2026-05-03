@@ -120,6 +120,7 @@ export interface AppConfig {
   };
   forceNetworkMode?: "auto" | "lan" | "wan" | "latency";
   latencyThresholdMs?: number;
+  whitelistLatencyMode?: boolean;
   customTitle: string;
   titleAlign: "left" | "center" | "right" | string;
   titleSize: number;

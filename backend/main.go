@@ -95,6 +95,7 @@ func trimBasePath(basePath, reqPath string) string {
 
 func main() {
 	fmt.Println("Backend process started")
+	gin.SetMode(gin.ReleaseMode)
 	config.Init()
 	handlers.InitWidgetCache()
 	handlers.InitGeocodingCache()
@@ -108,7 +109,9 @@ func main() {
 	r.Use(func(c *gin.Context) {
 		c.Next()
 	})
-	r.Use(gin.Logger())
+	if gin.Mode() != gin.ReleaseMode {
+		r.Use(gin.Logger())
+	}
 	r.Use(middleware.RecoveryMiddleware())
 	r.Use(middleware.GzipDecompressMiddleware())
 

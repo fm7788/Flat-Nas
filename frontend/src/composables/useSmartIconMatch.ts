@@ -548,14 +548,17 @@ export const useSmartIconMatch = ({ form, onSelect, notify }: SmartIconMatchOpti
         return false;
       }
 
-      if (!(await validateIconCandidate(normalizedUrl))) {
-        return false;
-      }
-
       if (activeRunId.value !== runId) return false;
 
+      // Skip strict validation for ali sources (already from trusted icon library)
+      // Only validate favicon and manually entered icons
+      if (candidate.source !== "ali" && normalizedUrl.startsWith("http")) {
+        if (!(await validateIconCandidate(normalizedUrl))) {
+          return false;
+        }
+      }
+
       seen.add(normalizedUrl);
-      // 追加到末尾，避免高分候选稍后到达时整体重排导致误点
       allCandidates.push(normalizedCandidate);
       publishCandidates();
       return true;

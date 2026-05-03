@@ -55,6 +55,13 @@ const latencyThresholdValidation = computed(() => {
   if (n < 20 || n > 30000) return { ok: false, value: n, error: "范围需在 20–30000 ms" };
   return { ok: true, value: n, error: "" };
 });
+const whitelistLatencyEnabled = computed(() => {
+  return store.appConfig.whitelistLatencyMode === true;
+});
+const toggleWhitelistLatency = () => {
+  store.appConfig.whitelistLatencyMode = !store.appConfig.whitelistLatencyMode;
+  store.markDirty();
+};
 const syncLatencyThresholdDraft = () => {
   const v = store.appConfig.latencyThresholdMs ?? DEFAULT_LATENCY_THRESHOLD_MS;
   latencyThresholdDraft.value = String(v);
@@ -3723,22 +3730,10 @@ watch(activeTab, (val) => {
           </div>
 
           <div v-if="activeTab === 'network'" class="p-4 space-y-4">
-            <div class="flex items-center justify-between gap-3 mb-4">
+            <div class="flex items-center gap-3 mb-4">
               <h4 class="text-base font-bold text-gray-900 border-l-4 border-gray-900 pl-3">
-                网络环境判定设置（规则）
+                网络环境判定设置
               </h4>
-              <button
-                type="button"
-                @click="toggleWhitelistLatencyMode"
-                class="px-3 py-1.5 rounded-lg text-xs font-bold transition-colors border whitespace-nowrap"
-                :class="
-                  store.forceNetworkMode === 'latency'
-                    ? 'bg-yellow-100 text-yellow-800 border-yellow-200 hover:bg-yellow-200'
-                    : 'bg-white text-gray-700 border-gray-200 hover:bg-gray-50'
-                "
-              >
-                {{ store.forceNetworkMode === "latency" ? "已启用：白名单+延迟" : "启动：白名单+延迟" }}
-              </button>
             </div>
 
             <div class="bg-gray-50 border border-gray-100 rounded-xl p-4 space-y-3">
@@ -3748,184 +3743,95 @@ watch(activeTab, (val) => {
                   >注</span
                 >
                 <p class="text-xs text-gray-600 leading-relaxed">
-                  FlatNas 会自动识别 <b>内网 (lan)</b>、<b>组网 (overlay)</b>、<b>公网 (wan)</b>。
-                  建议使用规则格式（每行一个）：
-                  <code>domain_suffix:</code>、<code>host:</code>、<code>ip:</code>。
-                  旧版白名单依然兼容。
+                  输入域名白名单（每行一个域名）。访问白名单域名时，会根据延迟自动判定：
+                  <b>延迟低 = 内网</b>，<b>延迟高 = 外网</b>。
+                  不在白名单中的域名会直接判定为外网。
                 </p>
               </div>
 
               <div class="space-y-2">
-                <label class="block text-sm font-medium text-gray-700">常见穿透 / 组网预设（推荐）</label>
-                <div class="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                  <button
-                    v-for="key in presetKeys"
-                    :key="key"
-                    type="button"
-                    @click="toggleNetworkPreset(key)"
-                    class="text-left px-3 py-2 rounded-lg border transition-colors"
-                    :class="
-                      store.appConfig.networkPresets?.[key as keyof typeof store.appConfig.networkPresets]
-                        ? 'border-blue-500 bg-blue-50 text-blue-700'
-                        : 'border-gray-200 bg-white text-gray-700 hover:bg-gray-50'
-                    "
-                  >
-                    <div class="text-xs font-bold">{{ presetMeta[key]?.label || key }}</div>
-                    <div class="text-[11px] opacity-80">{{ presetMeta[key]?.desc || '' }}</div>
-                  </button>
-                </div>
-                <p class="text-[10px] text-gray-500">
-                  * 启用后会自动参与网络环境判定（内网/组网/公网），无需手动切换。
-                </p>
-              </div>
-
-              <div class="space-y-2">
-                <label class="block text-sm font-medium text-gray-700">网络规则（高级）</label>
-                <textarea
-                  v-model="store.appConfig.networkRules"
-                  @change="store.markDirty()"
-                  rows="7"
-                  class="w-full px-3 py-2 border border-gray-200 rounded-lg text-xs focus:border-gray-900 outline-none font-mono"
-                  placeholder="示例：
-iepose.cn
-*.iepose.cn
-domain_suffix:.ts.net
-host:frp.example.com
-ip:100.64."
-                ></textarea>
-                <p class="text-[11px] text-gray-500">
-                  现在支持简写：直接填域名即可（如 <code>iepose.cn</code> 或 <code>*.iepose.cn</code>），会自动按“匹配该域名及所有子域名”处理。
-                </p>
-                <div class="flex items-center gap-2">
-                  <button
-                    type="button"
-                    @click="applyDefaultNetworkRules"
-                    class="px-3 py-1.5 rounded-lg text-xs font-bold bg-blue-600 text-white hover:bg-blue-500 transition-colors"
-                  >
-                    追加默认规则模板
-                  </button>
-                  <button
-                    type="button"
-                    @click="resetNetworkRules"
-                    class="px-3 py-1.5 rounded-lg text-xs font-bold bg-white text-gray-600 border border-gray-200 hover:bg-gray-50 transition-colors"
-                  >
-                    重置为默认模板
-                  </button>
-                </div>
-              </div>
-
-              <div class="space-y-2">
-                <label class="block text-sm font-medium text-gray-700">旧版白名单（兼容）</label>
+                <label class="block text-sm font-medium text-gray-700">域名白名单</label>
                 <textarea
                   v-model="store.appConfig.internalDomains"
                   @change="store.markDirty()"
-                  rows="3"
+                  rows="5"
                   class="w-full px-3 py-2 border border-gray-200 rounded-lg text-xs focus:border-gray-900 outline-none font-mono"
-                  placeholder="每行一个（旧格式），仍可继续使用"
+                  placeholder="每行一个域名（如 hp.fnos996.top 或 fnos996.top）"
                 ></textarea>
               </div>
             </div>
 
             <div class="bg-gray-50 border border-gray-100 rounded-xl p-4">
-              <h5 class="text-sm font-medium text-gray-700 mb-3">强制模式</h5>
-              <div class="flex items-center gap-4">
-                <label class="flex items-center gap-2 cursor-pointer">
-                  <input
-                    type="radio"
-                    v-model="store.forceNetworkMode"
-                    value="auto"
-                    class="text-gray-900 focus:ring-blue-400 accent-blue-400"
-                  />
-                  <span class="text-sm text-gray-700">自动判定 (推荐)</span>
-                </label>
-                <label class="flex items-center gap-2 cursor-pointer">
-                  <input
-                    type="radio"
-                    v-model="store.forceNetworkMode"
-                    value="lan"
-                    class="text-gray-900 focus:ring-blue-400 accent-blue-400"
-                  />
-                  <span class="text-sm text-gray-700">强制内网</span>
-                </label>
-                <label class="flex items-center gap-2 cursor-pointer">
-                  <input
-                    type="radio"
-                    v-model="store.forceNetworkMode"
-                    value="latency"
-                    class="text-gray-900 focus:ring-blue-400 accent-blue-400"
-                  />
-                  <span class="text-sm text-gray-700">延迟判定</span>
-                </label>
-                <label class="flex items-center gap-2 cursor-pointer">
-                  <input
-                    type="radio"
-                    v-model="store.forceNetworkMode"
-                    value="wan"
-                    class="text-gray-900 focus:ring-blue-400 accent-blue-400"
-                  />
-
-                  <span class="text-sm text-gray-700">强制外网</span>
-                </label>
-              </div>
-              <p class="mt-2 text-[11px] text-gray-500">
-                提示：已添加的域名规则在“自动判定”下就会生效；“延迟判定”仅在你切换到该模式时，才会按延迟阈值进一步判定。
-              </p>
-              <div v-if="store.forceNetworkMode === 'latency'" class="mt-3 space-y-1.5">
-                <div class="flex flex-col sm:flex-row sm:items-center gap-2">
-                  <div class="text-xs text-gray-600 sm:w-28 shrink-0">延迟阈值 (ms)</div>
-                  <div class="flex items-center gap-2 flex-1">
-                    <input
-                      :value="latencyThresholdDraft"
-                      inputmode="numeric"
-                      @input="onLatencyThresholdInput"
-                      @blur="onLatencyThresholdBlur"
-                      @keydown.enter.prevent="applyLatencyThreshold"
-                      placeholder="20–30000"
-                      class="w-32 px-3 py-2 border rounded-lg text-xs outline-none font-mono focus:border-gray-900"
-                      :class="
-                        latencyThresholdTouched && !latencyThresholdValidation.ok
-                          ? 'border-red-300'
-                          : 'border-gray-200'
-                      "
-                    />
-                    <button
-                      type="button"
-                      @click="applyLatencyThreshold"
-                      :disabled="!latencyThresholdValidation.ok"
-                      class="px-3 py-2 rounded-lg text-xs font-bold transition-colors whitespace-nowrap"
-                      :class="
-                        latencyThresholdValidation.ok
-                          ? 'bg-yellow-500 text-white hover:bg-yellow-600'
-                          : 'bg-gray-200 text-gray-500 cursor-not-allowed'
-                      "
-                    >
-                      确认
-                    </button>
-                    <button
-                      type="button"
-                      @click="resetLatencyThreshold"
-                      class="px-3 py-2 bg-white text-gray-600 border border-gray-200 rounded-lg text-xs font-bold hover:bg-gray-50 transition-colors whitespace-nowrap"
-                    >
-                      重置
-                    </button>
-                    <div class="text-[10px] text-gray-400 flex-1">
-                      默认 {{ DEFAULT_LATENCY_THRESHOLD_MS }} ms
-                    </div>
-                  </div>
-                </div>
-                <p
-                  v-if="latencyThresholdTouched && !latencyThresholdValidation.ok"
-                  class="text-[11px] text-red-600"
+              <h5 class="text-sm font-medium text-gray-700 mb-3">白名单+延迟判定</h5>
+              <div class="flex items-center gap-3 mb-3">
+                <button
+                  type="button"
+                  @click="toggleWhitelistLatency"
+                  class="px-3 py-1.5 rounded-lg text-xs font-bold transition-colors border whitespace-nowrap"
+                  :class="
+                    whitelistLatencyEnabled
+                      ? 'bg-blue-50 text-blue-600 border-blue-200 hover:bg-blue-100'
+                      : 'bg-white text-gray-700 border-gray-200 hover:bg-gray-50'
+                  "
                 >
-                  {{ latencyThresholdValidation.error }}
-                </p>
-                <p v-else-if="latencyThresholdAppliedToast" class="text-[11px] text-green-600">
-                  {{ latencyThresholdAppliedToast }}
-                </p>
-                <p v-else class="text-[11px] text-gray-500">
-                  启用白名单后优先按真实 IP 判定，其次才是延迟阈值判定；失焦或点击确认后立即生效。
-                </p>
+                  {{ whitelistLatencyEnabled ? '已启用' : '启用白名单+延迟判定' }}
+                </button>
+                <span class="text-[11px] text-gray-500">
+                  {{ whitelistLatencyEnabled ? '白名单域名将根据延迟判定内外网' : '白名单域名默认判定为外网' }}
+                </span>
               </div>
+              <div v-if="whitelistLatencyEnabled" class="flex items-center gap-2">
+                <input
+                  :value="latencyThresholdDraft"
+                  inputmode="numeric"
+                  @input="onLatencyThresholdInput"
+                  @blur="onLatencyThresholdBlur"
+                  @keydown.enter.prevent="applyLatencyThreshold"
+                  placeholder="20–30000"
+                  class="w-32 px-3 py-2 border rounded-lg text-xs outline-none font-mono focus:border-gray-900"
+                  :class="
+                    latencyThresholdTouched && !latencyThresholdValidation.ok
+                      ? 'border-red-300'
+                      : 'border-gray-200'
+                  "
+                />
+                <span class="text-xs text-gray-500">ms</span>
+                <button
+                  type="button"
+                  @click="applyLatencyThreshold"
+                  :disabled="!latencyThresholdValidation.ok"
+                  class="px-3 py-2 rounded-lg text-xs font-bold transition-colors whitespace-nowrap"
+                  :class="
+                    latencyThresholdValidation.ok
+                      ? 'bg-blue-600 text-white hover:bg-blue-500'
+                      : 'bg-gray-200 text-gray-500 cursor-not-allowed'
+                  "
+                >
+                  确认
+                </button>
+                <button
+                  type="button"
+                  @click="resetLatencyThreshold"
+                  class="px-3 py-2 bg-white text-gray-600 border border-gray-200 rounded-lg text-xs font-bold hover:bg-gray-50 transition-colors whitespace-nowrap"
+                >
+                  重置
+                </button>
+                <div class="text-[10px] text-gray-400">
+                  默认 {{ DEFAULT_LATENCY_THRESHOLD_MS }} ms
+                </div>
+              </div>
+              <p
+                v-if="latencyThresholdTouched && !latencyThresholdValidation.ok"
+                class="mt-2 text-[11px] text-red-600"
+              >
+                {{ latencyThresholdValidation.error }}
+              </p>
+              <p v-else-if="latencyThresholdAppliedToast" class="mt-2 text-[11px] text-green-600">
+                {{ latencyThresholdAppliedToast }}
+              </p>
+              <p v-else class="mt-2 text-[11px] text-gray-500">
+                白名单域名访问时，延迟低于此值判定为内网，高于此值判定为外网。默认 {{ DEFAULT_LATENCY_THRESHOLD_MS }} ms。
+              </p>
             </div>
           </div>
 

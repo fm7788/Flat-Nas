@@ -169,17 +169,27 @@ export const buildRulesFromPresets = (presets = {}) => {
   return Array.from(new Set(lines)).join("\n");
 };
 
+const isDomainInWhitelist = (hostname, whitelistStr) => {
+  if (!hostname || !whitelistStr) return false;
+  const lines = whitelistStr.split("\n").map(l => l.trim().toLowerCase()).filter(Boolean);
+  for (const line of lines) {
+    const domain = line.replace(/^\*\./, "").replace(/^https?:\/\//, "");
+    if (hostname === domain || hostname.endsWith(`.${domain}`)) {
+      return true;
+    }
+  }
+  return false;
+};
+
 export const getNetworkConfig = (appConfig = {}, localForceNetworkMode) => {
   const internalDomains = typeof appConfig.internalDomains === "string" ? appConfig.internalDomains : "";
-  const userRules = typeof appConfig.networkRules === "string" ? appConfig.networkRules : "";
-  const presetRules = buildRulesFromPresets(appConfig.networkPresets || {});
-  const networkRules = [userRules, presetRules].filter(Boolean).join("\n");
+  const whitelistLatencyMode = appConfig.whitelistLatencyMode === true;
   const mode = typeof localForceNetworkMode === "string" ? localForceNetworkMode : "";
-  const forceNetworkMode = ["auto", "lan", "wan", "latency"].includes(mode) ? mode : "auto";
+  const forceNetworkMode = ["auto", "lan", "wan"].includes(mode) ? mode : "auto";
   const raw = appConfig.latencyThresholdMs;
   const base = typeof raw === "number" && Number.isFinite(raw) ? Math.trunc(raw) : 50;
   const latencyThresholdMs = Math.min(30000, Math.max(10, base));
-  return { internalDomains, networkRules, forceNetworkMode, latencyThresholdMs };
+  return { internalDomains, whitelistLatencyMode, forceNetworkMode, latencyThresholdMs };
 };
 
 export const computeEffectiveNetworkMode = (
@@ -187,34 +197,33 @@ export const computeEffectiveNetworkMode = (
   clientIp,
   clientIpSource,
   measuredLatencyMs,
-  { internalDomains = "", networkRules = "", forceNetworkMode = "auto", latencyThresholdMs = 50 } = {},
+  { internalDomains = "", whitelistLatencyMode = false, forceNetworkMode = "auto", latencyThresholdMs = 50 } = {},
 ) => {
   const hostnameIntrinsicLan = isInternalNetwork(hostname, "", "");
-  const hostnameRulesLan = isInternalNetwork(hostname, internalDomains, networkRules);
   const canTrustClientIp = clientIpSource === "header";
-  const clientIsLan =
-    canTrustClientIp &&
-    !!clientIp &&
-    isInternalNetwork(clientIp, internalDomains, networkRules);
+  const clientIsLan = canTrustClientIp && !!clientIp && isInternalNetwork(clientIp, "", "");
+  const latencyBasedLan = Number.isFinite(measuredLatencyMs) && measuredLatencyMs > 0 && measuredLatencyMs <= latencyThresholdMs;
+  const isInWhitelist = isDomainInWhitelist(hostname, internalDomains);
 
-  const latencyBasedLan =
-    Number.isFinite(measuredLatencyMs) && measuredLatencyMs > 0 && measuredLatencyMs <= latencyThresholdMs;
-
+  // 强制模式优先级最高
   if (forceNetworkMode === "lan") return { isLan: true, reason: "force_lan", measuredLatencyMs };
   if (forceNetworkMode === "wan") return { isLan: false, reason: "force_wan", measuredLatencyMs };
 
-  if (forceNetworkMode === "latency") {
-    if (latencyBasedLan) return { isLan: true, reason: "latency_ok", measuredLatencyMs };
-    if (hostnameIntrinsicLan) return { isLan: true, reason: "hostname_intrinsic", measuredLatencyMs };
-    return { isLan: false, reason: "latency_high", measuredLatencyMs };
+  // 域名本身是内网地址
+  if (hostnameIntrinsicLan) return { isLan: true, reason: "hostname_intrinsic", measuredLatencyMs };
+
+  // 白名单域名：启用延迟判定时根据延迟判定，未启用则直接判定为外网
+  if (isInWhitelist) {
+    if (whitelistLatencyMode) {
+      if (latencyBasedLan) return { isLan: true, reason: "whitelist_latency_ok", measuredLatencyMs };
+      return { isLan: false, reason: "whitelist_latency_high", measuredLatencyMs };
+    }
+    return { isLan: true, reason: "whitelist_matched", measuredLatencyMs };
   }
 
-  if (hostnameIntrinsicLan) return { isLan: true, reason: "hostname_intrinsic", measuredLatencyMs };
+  // 客户端IP是内网
   if (canTrustClientIp && clientIsLan) return { isLan: true, reason: "client_ip_header", measuredLatencyMs };
 
-  if (latencyBasedLan) return { isLan: true, reason: "latency_ok", measuredLatencyMs };
-
-  if (hostnameRulesLan) return { isLan: true, reason: "hostname_rules", measuredLatencyMs };
-
+  // 默认外网
   return { isLan: false, reason: "default_wan", measuredLatencyMs };
 };

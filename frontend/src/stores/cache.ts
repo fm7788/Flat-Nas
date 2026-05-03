@@ -29,9 +29,9 @@ export const useCacheStore = defineStore("cache", () => {
   const cacheLoadedAt = ref<number | null>(null);
   const hasServerSnapshot = ref(false);
   const deferredSaveRequested = ref(false);
-  let isFetchingData = false;
+  const isFetchingData = false;
   let isLoadingSnapshot = false;
-  let serverSnapshotRetryTimer: ReturnType<typeof setTimeout> | null = null;
+  const serverSnapshotRetryTimer: ReturnType<typeof setTimeout> | null = null;
 
   const getHeaders = (): Record<string, string> => {
     const headers: Record<string, string> = { "Content-Type": "application/json" };
