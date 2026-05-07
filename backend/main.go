@@ -344,6 +344,7 @@ func main() {
 			authorized.POST("/backgrounds/upload", handlers.UploadBackground)
 			authorized.POST("/mobile_backgrounds/upload", handlers.UploadMobileBackground)
 			authorized.POST("/music/upload", handlers.UploadMusic) // Added Music Upload
+			authorized.DELETE("/music", handlers.DeleteMusic)      // Added Music Delete
 
 			// Transfer
 			api.GET("/transfer/items", handlers.GetTransferItems)

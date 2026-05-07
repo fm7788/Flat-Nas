@@ -4,6 +4,7 @@ import (
 	"flatnasgo-backend/config"
 	"fmt"
 	"net/http"
+	"os"
 	"path/filepath"
 	"strings"
 
@@ -52,4 +53,49 @@ func UploadMusic(c *gin.Context) {
 		"count":   count,
 		"errors":  errors,
 	})
+}
+
+type deleteMusicRequest struct {
+	Path string `json:"path"`
+}
+
+// DeleteMusic handles deletion of a music file
+func DeleteMusic(c *gin.Context) {
+	var req deleteMusicRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid request"})
+		return
+	}
+
+	if req.Path == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Path is required"})
+		return
+	}
+
+	musicPath := filepath.Join(config.MusicDir, req.Path)
+
+	absPath, err := filepath.Abs(musicPath)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid path"})
+		return
+	}
+
+	// Security: ensure the path is within MusicDir
+	absMusicDir, _ := filepath.Abs(config.MusicDir)
+	if !strings.HasPrefix(absPath, absMusicDir) {
+		c.JSON(http.StatusForbidden, gin.H{"error": "Permission denied"})
+		return
+	}
+
+	if _, err := os.Stat(absPath); os.IsNotExist(err) {
+		c.JSON(http.StatusNotFound, gin.H{"error": "File not found"})
+		return
+	}
+
+	if err := os.Remove(absPath); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to delete file"})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{"success": true})
 }
