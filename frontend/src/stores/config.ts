@@ -25,7 +25,7 @@ export const useConfigStore = defineStore("config", () => {
   const serverSyncLockCount = ref(0);
 
   // Version / update checking
-  const currentVersion = "1.2.3";
+  const currentVersion = "1.2.3dev1";
   const latestVersion = ref("");
   const dockerUpdateAvailable = ref(false);
   const updateCheckLastAt = useStorage<number>("flat-nas-update-check-last-at", 0);

@@ -951,6 +951,8 @@ const addToHome = (c: DockerContainer) => {
     };
 
     store.addItem(newItem, dockerGroup.id);
+    store.markDirty();
+    void store.saveData(true);
     showToast(`已添加 "${title}"`);
   };
 
@@ -1137,147 +1139,76 @@ const getStatusColor = (state: string) => {
         <div
           v-for="c in containers"
           :key="c.Id"
-          class="flex flex-col gap-1 p-1.5 bg-white rounded-lg border border-black"
+          class="flex flex-col gap-2 p-2.5 bg-white rounded-lg border border-gray-200"
         >
-          <div class="grid grid-cols-[1fr_auto] gap-2 items-start">
-            <div class="flex items-start gap-2 min-w-0">
-              <div :class="['w-2 h-2 rounded-full shrink-0 mt-1', getStatusColor(c.State)]"></div>
-              <div class="flex flex-col min-w-0 flex-1">
-                <div class="flex items-center gap-1 min-w-0">
-                  <span class="font-medium text-sm truncate text-black" :title="c.Names?.[0] || ''">
-                    {{ (c.Names?.[0] || "").replace(/^\//, "") }}
-                  </span>
-                  <span
-                    v-if="c.hasUpdate"
-                    class="text-[9px] bg-red-50 text-red-600 px-1 rounded border border-red-200 shrink-0"
-                  >
-                    可升级
-                  </span>
+          <!-- 主区域：左侧资源监控 + 右侧按钮 -->
+          <div class="flex items-stretch gap-3">
+            <!-- 左侧：资源监控 -->
+            <div class="flex-1 flex flex-col gap-1.5 justify-center min-w-0">
+              <!-- CPU -->
+              <div class="flex flex-col gap-1">
+                <div class="flex justify-between items-center">
+                  <span class="text-xs text-gray-500 font-medium">CPU</span>
+                  <span v-if="c.stats" class="text-xs font-mono text-gray-700">{{ c.stats.cpuPercent.toFixed(1) }}%</span>
+                  <span v-else class="text-xs text-gray-300">--</span>
                 </div>
-                <div class="flex items-center gap-2 min-w-0">
-                  <span class="text-[10px] text-black truncate min-w-0 flex-1" :title="c.Image">
-                    {{ c.Image }}
-                  </span>
-                  <button
-                    @click="promptPublicHost(c)"
-                    class="text-[10px] text-black hover:underline px-1 shrink-0"
-                    title="添加外网地址"
-                  >
-                    添加外网地址
-                  </button>
+                <div class="h-2 bg-gray-100 rounded-full overflow-hidden">
+                  <div
+                    class="h-full bg-blue-500 rounded-full transition-all duration-500"
+                    :style="{ width: c.stats ? Math.min(c.stats.cpuPercent, 100) + '%' : '0%' }"
+                  ></div>
                 </div>
-                <div v-if="editingPublicId === c.Id" class="flex items-center gap-1 mt-1">
-                  <input
-                    v-model="publicHostTemp"
-                    type="text"
-                    placeholder="nas.example.com"
-                    class="px-2 py-1 border border-gray-200 rounded text-[10px] focus:border-blue-500 outline-none w-36"
-                  />
-                  <button
-                    @click="savePublicHost(c)"
-                    class="text-[10px] text-green-600 hover:underline px-1"
-                    title="保存"
-                  >
-                    保存
-                  </button>
-                  <button
-                    @click="cancelPublicHost"
-                    class="text-[10px] text-gray-500 hover:underline px-1"
-                    title="取消"
-                  >
-                    取消
-                  </button>
+                <div v-if="c.stats && c.stats.netIO" class="text-[10px] text-gray-400 font-mono truncate" :title="`NET: ↓${formatBytes(c.stats.netIO.rx)}/s ↑${formatBytes(c.stats.netIO.tx)}/s`">
+                  ↓{{ formatBytes(c.stats.netIO.rx) }}/s ↑{{ formatBytes(c.stats.netIO.tx) }}/s
                 </div>
               </div>
-            </div>
-            <div class="flex flex-col items-end shrink-0">
-              <span class="text-[10px] text-black">{{ c.Status }}</span>
-              <div
-                class="flex flex-wrap justify-end gap-1 mt-0.5"
-                v-if="getDetectedPorts(c).length"
-              >
-                <span
-                  v-for="(p, i) in getDetectedPorts(c).slice(0, 2)"
-                  :key="i"
-                  class="text-[9px] bg-blue-50 text-blue-500 px-1 rounded border border-blue-100"
-                >
-                  {{ p }}
-                </span>
-                <span v-if="getDetectedPorts(c).length > 2" class="text-[9px] text-black"
-                  >+{{ getDetectedPorts(c).length - 2 }}</span
-                >
-              </div>
-            </div>
-          </div>
-
-          <div class="grid grid-cols-2 gap-2 mt-1">
-            <div class="flex flex-col gap-1">
-              <div
-                class="flex justify-between text-[10px] text-gray-500 dark:text-gray-300 items-end"
-              >
-                <span>CPU</span>
-                <span v-if="c.stats" class="font-mono">{{ c.stats.cpuPercent.toFixed(1) }}%</span>
-                <span v-else class="text-gray-300 dark:text-gray-500">--</span>
-              </div>
-              <div class="h-1.5 bg-gray-100 dark:bg-gray-600 rounded-full overflow-hidden">
-                <div
-                  class="h-full bg-blue-500 rounded-full transition-all duration-500"
-                  :style="{ width: c.stats ? Math.min(c.stats.cpuPercent, 100) + '%' : '0%' }"
-                ></div>
-              </div>
-              <div
-                class="flex justify-between text-[9px] text-gray-400 dark:text-gray-400 mt-0.5 font-mono items-center"
-              >
-                <span>NET</span>
-                <span v-if="c.stats && c.stats.netIO" class="tracking-tighter">
-                  ↓{{ formatBytes(c.stats.netIO.rx) }} ↑{{ formatBytes(c.stats.netIO.tx) }}
-                </span>
-                <span v-else class="text-gray-300 dark:text-gray-500">--</span>
-              </div>
-            </div>
-            <div class="flex flex-col gap-1">
-              <div
-                class="flex justify-between text-[10px] text-gray-500 dark:text-gray-300 items-end"
-              >
-                <span>MEM</span>
-                <span v-if="c.stats" class="font-mono"
-                  >{{ (c.stats.memUsage / 1024 / 1024).toFixed(0) }}MB</span
-                >
-                <span v-else class="text-gray-300 dark:text-gray-500">--</span>
-              </div>
-              <div class="h-1.5 bg-gray-100 dark:bg-gray-600 rounded-full overflow-hidden">
-                <div
-                  class="h-full bg-purple-500 rounded-full transition-all duration-500"
-                  :style="{ width: c.stats ? Math.min(c.stats.memPercent, 100) + '%' : '0%' }"
-                ></div>
-              </div>
-              <div
-                class="flex justify-between text-[9px] text-gray-400 dark:text-gray-400 mt-0.5 font-mono items-center"
-              >
-                <span>I/O</span>
-                <span v-if="c.stats && c.stats.blockIO" class="tracking-tighter">
+              <!-- MEM -->
+              <div class="flex flex-col gap-1">
+                <div class="flex justify-between items-center">
+                  <span class="text-xs text-gray-500 font-medium">MEM</span>
+                  <span v-if="c.stats" class="text-xs font-mono text-gray-700"
+                    >{{ (c.stats.memUsage / 1024 / 1024).toFixed(0) }}MB</span
+                  >
+                  <span v-else class="text-xs text-gray-300">--</span>
+                </div>
+                <div class="h-2 bg-gray-100 rounded-full overflow-hidden">
+                  <div
+                    class="h-full bg-purple-500 rounded-full transition-all duration-500"
+                    :style="{ width: c.stats ? Math.min(c.stats.memPercent, 100) + '%' : '0%' }"
+                  ></div>
+                </div>
+                <div v-if="c.stats && c.stats.blockIO" class="text-[10px] text-gray-400 font-mono truncate" :title="`IO: R${formatBytes(c.stats.blockIO.read)} W${formatBytes(c.stats.blockIO.write)}`">
                   R{{ formatBytes(c.stats.blockIO.read) }} W{{ formatBytes(c.stats.blockIO.write) }}
-                </span>
-                <span v-else class="text-gray-300 dark:text-gray-500">--</span>
+                </div>
               </div>
             </div>
-          </div>
 
-          <div
-            class="flex items-center justify-end gap-2 mt-1 pt-1 border-t border-gray-100 dark:border-gray-700"
-          >
-            <div class="flex flex-wrap items-center gap-1 mr-auto min-w-0">
-              <button
-                v-if="c.State === 'running' && getPreferredPort(c)"
+            <!-- 右侧：容器信息+操作按钮 -->
+            <div class="w-40 flex flex-col gap-1 justify-center border-l border-gray-100 pl-3 shrink-0">
+              <!-- 容器名+状态 -->
+              <div class="flex items-center min-w-0 mb-1">
+                <div :class="['w-2 h-2 rounded-full shrink-0', getStatusColor(c.State)]"></div>
+                <span class="font-medium text-xs truncate text-black ml-1" :title="c.Names?.[0] || ''">
+                  {{ (c.Names?.[0] || "").replace(/^\//, "") }}
+                </span>
+                <span
+                  v-if="c.hasUpdate"
+                  class="text-[8px] bg-red-50 text-red-600 px-1 py-0.5 rounded border border-red-200 shrink-0 font-medium ml-1"
+                >
+                  可升级
+                </span>
+              </div>
+              <div
+                v-if="c.State === 'running' && getContainerLanUrl(c)"
                 @click="openContainerUrl(c)"
-                class="px-2 py-1 hover:bg-gray-100 text-black rounded transition-colors text-xs flex items-center gap-1"
-                title="内网打开"
+                class="px-2 py-1 hover:bg-blue-50 text-blue-600 rounded transition-colors text-xs font-mono flex items-center gap-1.5 cursor-pointer truncate"
+                title="内网地址"
               >
                 <svg
                   xmlns="http://www.w3.org/2000/svg"
                   viewBox="0 0 24 24"
                   fill="currentColor"
-                  class="w-4 h-4"
+                  class="w-4 h-4 shrink-0"
                 >
                   <path
                     fill-rule="evenodd"
@@ -1285,123 +1216,52 @@ const getStatusColor = (state: string) => {
                     clip-rule="evenodd"
                   />
                 </svg>
-                <span>内网打开</span>
-              </button>
-              <button
-                v-if="c.State === 'running' && getPreferredPort(c)"
-                @click="openContainerPublicUrl(c)"
-                class="px-2 py-1 hover:bg-gray-100 text-black rounded transition-colors text-xs flex items-center gap-1"
-                title="外网打开"
-              >
-                <svg
-                  xmlns="http://www.w3.org/2000/svg"
-                  viewBox="0 0 24 24"
-                  fill="currentColor"
-                  class="w-4 h-4"
+                <span class="truncate">{{ getContainerLanUrl(c).replace(/^https?:\/\//, '') }}</span>
+              </div>
+              <div class="flex items-center gap-1 pt-1 border-t border-gray-100 mt-0.5">
+                <button
+                  v-if="c.State === 'running'"
+                  @click="addToHome(c)"
+                  class="text-xs font-medium text-white bg-green-500 hover:bg-green-600 px-1.5 py-0.5 rounded transition-colors whitespace-nowrap"
+                  title="添加到桌面"
                 >
-                  <path
-                    fill-rule="evenodd"
-                    d="M3 4.5A1.5 1.5 0 014.5 3h9A1.5 1.5 0 0115 4.5V9a1.5 1.5 0 01-1.5 1.5H9.31l2.44 2.44a.75.75 0 11-1.06 1.06L7.5 10.31V12a1.5 1.5 0 01-1.5 1.5H1.5A1.5 1.5 0 010 12V4.5A1.5 1.5 0 011.5 3H3v1.5z"
-                    clip-rule="evenodd"
-                  />
-                </svg>
-                <span>外网打开</span>
-              </button>
-              <button
-                v-if="c.State === 'running'"
-                @click="addToHome(c)"
-                class="px-2 py-1 hover:bg-gray-100 text-black rounded transition-colors text-xs flex items-center gap-1"
-                title="添加到桌面"
-              >
-                <svg
-                  xmlns="http://www.w3.org/2000/svg"
-                  viewBox="0 0 24 24"
-                  fill="currentColor"
-                  class="w-4 h-4"
+                  + 卡片
+                </button>
+                <button
+                  v-if="c.State !== 'running'"
+                  @click="handleAction(c.Id, 'start')"
+                  class="text-xs font-medium text-green-600 hover:bg-green-50 px-1.5 py-0.5 rounded transition-colors whitespace-nowrap"
+                  title="启动"
                 >
-                  <path
-                    fill-rule="evenodd"
-                    d="M12 2.25c-5.385 0-9.75 4.365-9.75 4.365-9.75 9.75s4.365 9.75 9.75 9.75 9.75-4.365 9.75-9.75S17.385 2.25 12 2.25zM12.75 9a.75.75 0 00-1.5 0v2.25H9a.75.75 0 000 1.5h2.25V15a.75.75 0 001.5 0v-2.25H15a.75.75 0 000-1.5h-2.25V9z"
-                    clip-rule="evenodd"
-                  />
-                </svg>
-                <span>添加卡片</span>
-              </button>
-
-              <label
-                class="flex items-center gap-1 cursor-pointer hover:bg-gray-100 px-2 py-1 rounded select-none"
-                title="勾选后将跳过此容器的自动升级"
-              >
+                  启动
+                </button>
+                <button
+                  v-if="c.State === 'running'"
+                  @click="handleAction(c.Id, 'stop')"
+                  class="text-xs font-medium text-red-600 hover:bg-red-50 px-1.5 py-0.5 rounded transition-colors whitespace-nowrap"
+                  title="停止"
+                >
+                  停止
+                </button>
+                <button
+                  @click="handleAction(c.Id, 'restart')"
+                  class="text-xs font-medium text-blue-600 hover:bg-blue-50 px-1.5 py-0.5 rounded transition-colors whitespace-nowrap"
+                  title="重启"
+                >
+                  重启
+                </button>
+              </div>
+              <label class="flex items-center gap-1.5 cursor-pointer hover:bg-gray-50 px-2 py-1 rounded select-none" title="勾选后将跳过此容器的自动升级">
                 <input
                   type="checkbox"
-                  class="rounded text-blue-600 focus:ring-blue-500 w-3 h-3 cursor-pointer"
+                  class="rounded text-blue-600 focus:ring-blue-500 w-3.5 h-3.5 cursor-pointer"
                   :checked="isAutoUpdateDisabled(c.Id)"
                   @change="
                     (e) => toggleAutoUpdateDisabled(c.Id, (e.target as HTMLInputElement).checked)
                   "
                 />
-                <span class="text-xs text-black">禁止自动升级</span>
+                <span class="text-xs text-gray-600">禁止升级</span>
               </label>
-            </div>
-            <div class="flex items-center gap-1 shrink-0">
-              <button
-                v-if="c.State !== 'running'"
-                @click="handleAction(c.Id, 'start')"
-                class="p-1 hover:bg-green-100 text-green-600 rounded transition-colors"
-                title="启动"
-              >
-                <svg
-                  xmlns="http://www.w3.org/2000/svg"
-                  viewBox="0 0 24 24"
-                  fill="currentColor"
-                  class="w-4 h-4"
-                >
-                  <path
-                    fill-rule="evenodd"
-                    d="M4.5 5.653c0-1.426 1.529-2.33 2.779-1.643l11.54 6.348c1.295.712 1.295 2.573 0 3.285L7.28 19.991c-1.25.687-2.779-.217-2.779-1.643V5.653z"
-                    clip-rule="evenodd"
-                  />
-                </svg>
-              </button>
-
-              <button
-                v-if="c.State === 'running'"
-                @click="handleAction(c.Id, 'stop')"
-                class="p-1 hover:bg-red-100 text-red-600 rounded transition-colors"
-                title="停止"
-              >
-                <svg
-                  xmlns="http://www.w3.org/2000/svg"
-                  viewBox="0 0 24 24"
-                  fill="currentColor"
-                  class="w-4 h-4"
-                >
-                  <path
-                    fill-rule="evenodd"
-                    d="M4.5 7.5a3 3 0 013-3h9a3 3 0 013 3v9a3 3 0 01-3 3h-9a3 3 0 01-3-3v-9z"
-                    clip-rule="evenodd"
-                  />
-                </svg>
-              </button>
-
-              <button
-                @click="handleAction(c.Id, 'restart')"
-                class="p-1 hover:bg-blue-100 text-blue-600 rounded transition-colors"
-                title="重启"
-              >
-                <svg
-                  xmlns="http://www.w3.org/2000/svg"
-                  viewBox="0 0 24 24"
-                  fill="currentColor"
-                  class="w-4 h-4"
-                >
-                  <path
-                    fill-rule="evenodd"
-                    d="M4.755 10.059a7.5 7.5 0 0112.548-3.364l1.903 1.903h-3.183a.75.75 0 100 1.5h4.992a.75.75 0 00.75-.75V4.356a.75.75 0 00-1.5 0v3.18l-1.9-1.9A9 9 0 003.306 9.67a.75.75 0 101.45.388zm15.408 3.352a.75.75 0 00-.919.53 7.5 7.5 0 01-12.548 3.364l-1.902-1.903h3.183a.75.75 0 000-1.5H2.984a.75.75 0 00-.75.75v4.992a.75.75 0 001.5 0v-3.18l1.9 1.9a9 9 0 0015.059-4.035.75.75 0 00-.53-.919z"
-                    clip-rule="evenodd"
-                  />
-                </svg>
-              </button>
             </div>
           </div>
         </div>

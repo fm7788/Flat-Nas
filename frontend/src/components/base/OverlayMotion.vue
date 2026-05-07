@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed } from "vue";
+import { computed, ref } from "vue";
 
 const props = withDefaults(
   defineProps<{
@@ -36,8 +36,11 @@ const emit = defineEmits<{
   (e: "overlay-mouseup", event: MouseEvent): void;
 }>();
 
+const startedOnPanel = ref(false);
+
 const handleOverlayClick = (event: MouseEvent) => {
   if (event.target !== event.currentTarget) return;
+  if (startedOnPanel.value) return;
   emit("overlay-click", event);
   if (props.closeOnOverlay) {
     emit("close");
@@ -46,12 +49,21 @@ const handleOverlayClick = (event: MouseEvent) => {
 
 const handleOverlayMouseDown = (event: MouseEvent) => {
   if (event.target !== event.currentTarget) return;
+  startedOnPanel.value = false;
   emit("overlay-mousedown", event);
 };
 
 const handleOverlayMouseUp = (event: MouseEvent) => {
   if (event.target !== event.currentTarget) return;
   emit("overlay-mouseup", event);
+};
+
+const handlePanelMouseDown = () => {
+  startedOnPanel.value = true;
+};
+
+const handlePanelMouseUp = () => {
+  startedOnPanel.value = false;
 };
 
 const variantRootClass = computed(() => {
@@ -90,6 +102,8 @@ const variantPanelClass = computed(() => {
           :class="['overlay-motion-panel', variantPanelClass, panelClass]"
           :style="panelStyle"
           @click.stop
+          @mousedown="handlePanelMouseDown"
+          @mouseup="handlePanelMouseUp"
         >
           <slot />
         </component>

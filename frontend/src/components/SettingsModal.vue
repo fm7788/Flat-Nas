@@ -307,6 +307,8 @@ const multiOpenWidgetTypes = ["iframe", "countdown", "countup", "amap-weather"];
 const dedicatedWidgetTypes = ["docker"];
 const isSingleOpenWidget = (type: string) =>
   !multiOpenWidgetTypes.includes(type) && !dedicatedWidgetTypes.includes(type);
+const isDockerComponentCreated = computed(() => !!dockerWidget.value);
+const isDockerComponentEnabled = computed(() => !!dockerWidget.value && dockerWidget.value.enable);
 const sortedWidgets = computed(() => {
   const list = [...store.widgets];
   const playerIndex = list.findIndex((w) => w.type === "player");
@@ -2936,7 +2938,7 @@ watch(activeTab, (val) => {
                     <code>unix:///var/run/docker.sock</code>。
                   </p>
                 </div>
-                <label class="relative inline-flex items-center cursor-pointer">
+                <label class="relative inline-flex items-center cursor-pointer shrink-0">
                   <input
                     type="checkbox"
                     :checked="isDockerSystemEnabled"
@@ -2946,9 +2948,9 @@ watch(activeTab, (val) => {
                     class="sr-only peer"
                   />
                   <div
-                    class="w-9 h-5 bg-gray-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white peer-disabled:opacity-50 after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-green-500"
+                    class="w-9 h-5 bg-gray-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white peer-disabled:opacity-50 after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-green-500 shrink-0"
                   ></div>
-                  <span class="text-sm text-gray-700 ml-3">
+                  <span class="text-sm text-gray-700 ml-3 whitespace-nowrap">
                     {{ isUpdatingDockerSystem ? "切换中" : isDockerSystemEnabled ? "已启用" : "已关闭" }}
                   </span>
                 </label>
@@ -3067,106 +3069,105 @@ watch(activeTab, (val) => {
               </div>
             </div>
 
-            <div v-if="dockerWidget" class="space-y-3">
-              <div class="flex items-center justify-between">
-                <span class="text-sm font-bold text-gray-900">Docker 组件</span>
-                <div class="flex items-center gap-4">
-                  <div v-if="dockerWidget.enable" class="flex items-center gap-2 animate-fade-in">
-                    <div class="flex items-center gap-2">
-                      <span class="text-xs text-gray-700 font-medium">公开访问</span>
-                      <label class="relative inline-flex items-center cursor-pointer">
-                        <input
-                          type="checkbox"
-                          v-model="dockerWidget.isPublic"
-                          class="sr-only peer"
-                        />
-                        <div
-                          class="w-9 h-5 bg-gray-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-blue-500"
-                        ></div>
-                      </label>
+            <div class="space-y-4">
+              <!-- 未启用时的提示 -->
+              <template v-if="!isDockerComponentCreated">
+                <div class="flex items-center justify-between">
+                  <span class="text-sm font-bold text-gray-900">容器管理</span>
+                  <button
+                    @click="enableDockerWidget"
+                    class="px-4 py-2 bg-gray-900 text-white rounded-lg hover:bg-black transition-colors shadow-sm text-sm"
+                  >
+                    启用容器管理
+                  </button>
+                </div>
+              </template>
+
+              <!-- 已启用后的管理区 -->
+              <template v-else>
+                <!-- 主控制区 -->
+                <div class="flex items-center justify-between">
+                  <span class="text-sm font-bold text-gray-900">容器管理</span>
+                  <div class="flex items-center gap-4">
+                    <div class="flex items-center gap-4 animate-fade-in">
+                      <div class="flex items-center gap-2">
+                        <span class="text-xs text-gray-700 font-medium">公开访问</span>
+                        <label class="relative inline-flex items-center cursor-pointer">
+                          <input type="checkbox" v-model="dockerWidget.isPublic" class="sr-only peer" />
+                          <div
+                            class="w-9 h-5 bg-gray-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-blue-500"
+                          ></div>
+                        </label>
+                      </div>
+                      <div class="flex items-center gap-2">
+                        <span class="text-xs text-gray-700 font-medium">手机端显示</span>
+                        <label class="relative inline-flex items-center cursor-pointer">
+                          <input type="checkbox" :checked="!dockerWidget.hideOnMobile" @change="onMobileDockerDisplayChange" class="sr-only peer" />
+                          <div
+                            class="w-9 h-5 bg-gray-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-orange-500"
+                          ></div>
+                        </label>
+                      </div>
                     </div>
-                    <div class="flex items-center gap-2">
-                      <span class="text-xs text-gray-700 font-medium">手机端显示</span>
-                      <label class="relative inline-flex items-center cursor-pointer">
-                        <input
-                          type="checkbox"
-                          :checked="!dockerWidget.hideOnMobile"
-                          @change="onMobileDockerDisplayChange"
-                          class="sr-only peer"
-                        />
-                        <div
-                          class="w-9 h-5 bg-gray-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-orange-500"
-                        ></div>
-                      </label>
-                    </div>
+                    <label class="relative inline-flex items-center cursor-pointer">
+                      <input type="checkbox" v-model="dockerWidget.enable" aria-label="容器管理组件" class="sr-only peer" />
+                      <div class="w-9 h-5 bg-gray-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-green-500"></div>
+                      <span class="text-sm text-gray-700 ml-3">容器管理组件</span>
+                    </label>
                   </div>
-                  <label class="relative inline-flex items-center cursor-pointer">
-                    <input
-                      type="checkbox"
-                      v-model="dockerWidget.enable"
-                      aria-label="显示 Docker 组件"
-                      class="sr-only peer"
-                    />
-                    <div
-                      class="w-9 h-5 bg-gray-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-green-500"
-                    ></div>
-                    <span class="text-sm text-gray-700 ml-3">显示组件</span>
-                  </label>
                 </div>
-              </div>
 
-              <p class="text-xs text-gray-500">
-                这里控制首页 Docker 卡片是否显示，不影响后端 Docker 服务是否连接。
-              </p>
+                <!-- 功能配置区 -->
+                <div class="flex flex-wrap items-center gap-4 border-t border-gray-100 pt-3">
+                  <!-- 模拟数据 -->
+                  <div class="flex items-center gap-2">
+                    <span class="text-xs text-gray-500">模拟数据</span>
+                    <label class="relative inline-flex items-center cursor-pointer">
+                      <input
+                        type="checkbox"
+                        :checked="!!dockerWidget.data?.useMock"
+                        @change="(e) => toggleDockerMock((e.target as HTMLInputElement).checked)"
+                        class="sr-only peer"
+                      />
+                      <div
+                        class="w-9 h-5 bg-gray-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-blue-600"
+                      ></div>
+                    </label>
+                  </div>
 
-              <div class="flex flex-wrap items-center gap-4 border-t border-gray-100 pt-3">
-                <div class="flex items-center gap-2">
-                  <span class="text-xs text-gray-500">模拟数据启用</span>
-                  <label class="relative inline-flex items-center cursor-pointer">
-                    <input
-                      type="checkbox"
-                      :checked="!!dockerWidget.data?.useMock"
-                      @change="(e) => toggleDockerMock((e.target as HTMLInputElement).checked)"
-                      class="sr-only peer"
-                    />
-                    <div
-                      class="w-9 h-5 bg-gray-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-blue-600"
-                    ></div>
-                  </label>
-                </div>
-                <div class="flex items-center gap-2">
-                  <span class="text-xs text-gray-500">自动升级镜像(每2小时)</span>
-                  <label class="relative inline-flex items-center cursor-pointer">
-                    <input
-                      type="checkbox"
-                      :checked="!!dockerWidget.data?.autoUpdate"
-                      @change="
-                        (e) => {
-                          if (dockerWidget) {
+                  <!-- 自动升级 -->
+                  <div class="flex items-center gap-2">
+                    <span class="text-xs text-gray-500">自动升级</span>
+                    <label class="relative inline-flex items-center cursor-pointer">
+                      <input
+                        type="checkbox"
+                        :checked="!!dockerWidget.data?.autoUpdate"
+                        @change="
+                          (e) => {
                             if (!dockerWidget.data) dockerWidget.data = {};
                             dockerWidget.data.autoUpdate = (e.target as HTMLInputElement).checked;
                             store.markDirty();
                           }
-                        }
-                      "
-                      class="sr-only peer"
-                    />
-                    <div
-                      class="w-9 h-5 bg-gray-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-blue-600"
-                    ></div>
-                  </label>
-                </div>
-                <div class="flex items-center gap-2">
-                  <span class="text-[10px] text-gray-500">保留版本</span>
-                  <input
-                    type="number"
-                    min="1"
-                    max="20"
-                    :disabled="!dockerWidget?.data?.autoUpdate"
-                    :value="dockerWidget?.data?.autoUpdateKeepImages ?? 2"
-                    @change="
-                      (e) => {
-                        if (dockerWidget) {
+                        "
+                        class="sr-only peer"
+                      />
+                      <div
+                        class="w-9 h-5 bg-gray-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-blue-600"
+                      ></div>
+                    </label>
+                  </div>
+
+                  <!-- 升级配置 -->
+                  <div class="flex items-center gap-2">
+                    <span class="text-[10px] text-gray-500">保留版本</span>
+                    <input
+                      type="number"
+                      min="1"
+                      max="20"
+                      :disabled="!dockerWidget?.data?.autoUpdate"
+                      :value="dockerWidget?.data?.autoUpdateKeepImages ?? 2"
+                      @change="
+                        (e) => {
                           if (!dockerWidget.data) dockerWidget.data = {};
                           dockerWidget.data.autoUpdateKeepImages = Math.max(
                             1,
@@ -3174,23 +3175,22 @@ watch(activeTab, (val) => {
                           );
                           store.markDirty();
                         }
-                      }
-                    "
-                    class="w-16 px-2 py-1 border border-gray-200 rounded text-xs focus:border-gray-900 outline-none disabled:bg-gray-50 disabled:text-gray-400"
-                  />
-                  <span class="text-[10px] text-gray-500">个</span>
-                </div>
-                <div class="flex items-center gap-2">
-                  <span class="text-[10px] text-gray-500">最小可用空间</span>
-                  <input
-                    type="number"
-                    min="0"
-                    step="0.5"
-                    :disabled="!dockerWidget?.data?.autoUpdate"
-                    :value="dockerWidget?.data?.autoUpdateMinFreeGB ?? 5"
-                    @change="
-                      (e) => {
-                        if (dockerWidget) {
+                      "
+                      class="w-16 px-2 py-1 border border-gray-200 rounded text-xs focus:border-gray-900 outline-none disabled:bg-gray-50 disabled:text-gray-400"
+                    />
+                    <span class="text-[10px] text-gray-500">个</span>
+                  </div>
+
+                  <div class="flex items-center gap-2">
+                    <span class="text-[10px] text-gray-500">磁盘阈值</span>
+                    <input
+                      type="number"
+                      min="0"
+                      step="0.5"
+                      :disabled="!dockerWidget?.data?.autoUpdate"
+                      :value="dockerWidget?.data?.autoUpdateMinFreeGB ?? 5"
+                      @change="
+                        (e) => {
                           if (!dockerWidget.data) dockerWidget.data = {};
                           dockerWidget.data.autoUpdateMinFreeGB = Math.max(
                             0,
@@ -3198,63 +3198,52 @@ watch(activeTab, (val) => {
                           );
                           store.markDirty();
                         }
-                      }
-                    "
-                    class="w-20 px-2 py-1 border border-gray-200 rounded text-xs focus:border-gray-900 outline-none disabled:bg-gray-50 disabled:text-gray-400"
-                  />
-                  <span class="text-[10px] text-gray-500">GB</span>
-                </div>
-                <div class="flex items-center gap-2">
-                  <span class="text-xs text-gray-700 font-medium">内网主机</span>
-                  <input
-                    :value="dockerWidget?.data?.lanHost"
-                    @change="
-                      (e) => {
-                        if (dockerWidget) {
+                      "
+                      class="w-20 px-2 py-1 border border-gray-200 rounded text-xs focus:border-gray-900 outline-none disabled:bg-gray-50 disabled:text-gray-400"
+                    />
+                    <span class="text-[10px] text-gray-500">GB</span>
+                  </div>
+
+                  <!-- 内网主机 -->
+                  <div class="flex items-center gap-2">
+                    <span class="text-xs text-gray-700 font-medium">内网主机</span>
+                    <input
+                      :value="dockerWidget?.data?.lanHost"
+                      @change="
+                        (e) => {
                           if (!dockerWidget.data) dockerWidget.data = {};
                           dockerWidget.data.lanHost = (e.target as HTMLInputElement).value;
                           store.markDirty();
                         }
-                      }
-                    "
-                    type="text"
-                    placeholder="例如：192.168.1.10"
-                    class="px-2 py-1 border border-gray-200 rounded text-xs focus:border-gray-900 outline-none"
-                  />
+                      "
+                      type="text"
+                      placeholder="例如：192.168.1.10"
+                      class="px-2 py-1 border border-gray-200 rounded text-xs focus:border-gray-900 outline-none"
+                    />
+                  </div>
                 </div>
-              </div>
-              <div
-                v-if="isDockerSystemEnabled && dockerWidget.enable"
-                class="h-[500px]"
-              >
-                <DockerWidget :widget="dockerWidget" :compact="true" />
-              </div>
-              <div
-                v-else
-                class="h-[160px] rounded-2xl border border-dashed border-gray-200 bg-gray-50/80 flex items-center justify-center text-center px-6"
-              >
-                <div class="text-sm text-gray-500 space-y-2">
-                  <p v-if="!isDockerSystemEnabled">Docker 服务已关闭，组件预览已暂停。</p>
-                  <p v-else>Docker 组件当前未显示，打开“显示组件”后可预览。</p>
-                  <p class="text-xs text-gray-400">
-                    关闭系统级总开关后，不会继续自动探测 Docker 或轮询容器状态。
-                  </p>
-                </div>
-              </div>
-            </div>
 
-            <div v-else class="text-center py-8 text-gray-500">
-              <p class="mb-4">未启用 Docker 组件</p>
-              <button
-                @click="enableDockerWidget"
-                class="px-4 py-2 bg-gray-900 text-white rounded-lg hover:bg-black transition-colors shadow-sm"
-              >
-                启用 Docker 组件
-              </button>
-              <p class="mt-4 text-xs text-gray-500 max-w-xs mx-auto">
-                如果您的系统不支持
-                Docker（如旧版本），启用后可以在上方开启"使用模拟数据"以体验功能。
-              </p>
+                <!-- 容器预览（始终可见） -->
+                <div class="border-t border-gray-100 pt-3">
+                  <div
+                    v-if="isDockerSystemEnabled"
+                    class="h-[500px]"
+                  >
+                    <DockerWidget :widget="dockerWidget" :compact="true" />
+                  </div>
+                  <div
+                    v-else
+                    class="h-[160px] rounded-2xl border border-dashed border-gray-200 bg-gray-50/80 flex items-center justify-center text-center px-6"
+                  >
+                    <div class="text-sm text-gray-500 space-y-2">
+                      <p>Docker 服务总开关已关闭，请在上方"Docker 服务"区域开启。</p>
+                      <p class="text-xs text-gray-400">
+                        关闭系统级总开关后，不会继续自动探测 Docker 或轮询容器状态。
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              </template>
             </div>
           </div>
 
