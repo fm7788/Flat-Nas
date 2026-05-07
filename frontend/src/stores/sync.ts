@@ -73,7 +73,7 @@ export const useSyncStore = defineStore("sync", () => {
         wsContinuousFailures++;
         if (wsContinuousFailures > 6) {
           console.warn(`[WS] ${wsContinuousFailures} consecutive disconnections, scheduling immediate sync`);
-          syncStore.scheduleImmediateSync();
+          setTimeout(() => fetchAndProcessData(), 0);
         }
       },
     },
@@ -498,6 +498,7 @@ export const useSyncStore = defineStore("sync", () => {
     auth.username = "";
     localStorage.removeItem("flat-nas-token");
     localStorage.removeItem("flat-nas-username");
+    localStorage.removeItem("flat-nas-data-cache");
     await init();
   };
 
@@ -589,6 +590,7 @@ export const useSyncStore = defineStore("sync", () => {
     offlineQueueCount: saveStore.offlineQueueCount, offlineQueueConflictState: saveStore.offlineQueueConflictState,
     resolveOfflineQueueConflict, discardOfflineQueue,
     init, fetchData: fetchAndProcessData, fetchVersionOnly,
+    doLogout,
     syncConfirmModal: saveStore.syncConfirmModal, confirmSyncFromServer, dismissSyncConfirm,
     lastPingAt: networkStore.lastPingAt, isNetworkSyncActive: networkStore.isNetworkSyncActive,
     startNetworkHeartbeat: () => networkStore.startNetworkHeartbeat(wsSend), stopNetworkHeartbeat: networkStore.stopNetworkHeartbeat,

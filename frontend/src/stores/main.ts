@@ -22,7 +22,7 @@ export const useMainStore = defineStore("main", () => {
   const password = computed(() => auth.password);
   const login = auth.login;
   const register = auth.register;
-  const logout = auth.logout;
+  const logout = sync.doLogout;
   const changePassword = auth.changePassword;
   const fetchUsers = auth.fetchUsers;
   const addUser = auth.addUser;
