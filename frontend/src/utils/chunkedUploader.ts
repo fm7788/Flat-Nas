@@ -86,6 +86,7 @@ export class ChunkedUploader {
   private controller: AbortController | null = null;
   private isPaused = false;
   private isActive = false;
+  private currentFile: File | null = null;
 
   constructor(getHeaders: GetHeadersFn, callbacks: UploadCallbacks = {}) {
     this.getHeaders = getHeaders;
@@ -93,6 +94,7 @@ export class ChunkedUploader {
   }
 
   async start(file: File, existingSessionKey?: string): Promise<void> {
+    this.currentFile = file;
     const fileKey = existingSessionKey || this.generateFileKey(file);
 
     const existing = loadSession(fileKey);
@@ -225,9 +227,8 @@ export class ChunkedUploader {
       return true;
     } catch (e) {
       if (isNetworkError(e)) {
-        this.state = existing;
         this.callbacks.onPause?.("network_unavailable");
-        return true;
+        return false;
       }
       removeSession(existing.fileKey);
       return false;
@@ -235,7 +236,8 @@ export class ChunkedUploader {
   }
 
   private async uploadRemainingChunks(file?: File): Promise<void> {
-    if (!this.state || !file) return;
+    const actualFile = file ?? this.currentFile;
+    if (!this.state || !actualFile) return;
 
     this.isActive = true;
     this.isPaused = false;
@@ -249,7 +251,7 @@ export class ChunkedUploader {
 
       const start = i * chunkSize;
       const end = Math.min(fileSize, start + chunkSize);
-      const blob = file.slice(start, end);
+      const blob = actualFile.slice(start, end);
 
       let attempt = 0;
       let success = false;
@@ -262,9 +264,12 @@ export class ChunkedUploader {
           form.append("index", String(i));
           form.append("chunk", blob, `${this.state.fileName}.part`);
 
+          const chunkHeaders = this.getHeaders();
+          delete chunkHeaders["Content-Type"];
+
           const r = await fetch("/api/transfer/upload/chunk", {
             method: "POST",
-            headers: { ...this.getHeaders() },
+            headers: chunkHeaders,
             body: form,
             signal: this.controller.signal,
           });
