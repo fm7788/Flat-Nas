@@ -31,6 +31,11 @@ func init() {
 	mime.AddExtensionType(".svg", "image/svg+xml")
 	mime.AddExtensionType(".ico", "image/x-icon")
 	mime.AddExtensionType(".jpeg", "image/jpeg")
+	mime.AddExtensionType(".mp3", "audio/mpeg")
+	mime.AddExtensionType(".flac", "audio/flac")
+	mime.AddExtensionType(".wav", "audio/wav")
+	mime.AddExtensionType(".m4a", "audio/mp4")
+	mime.AddExtensionType(".ogg", "audio/ogg")
 }
 
 func staticCacheControlForPath(reqPath string) string {
