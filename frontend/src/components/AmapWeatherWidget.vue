@@ -295,7 +295,7 @@ const fetchWeather = async () => {
   }
 };
 
-const saveConfig = () => {
+const saveConfig = async () => {
   // eslint-disable-next-line vue/no-mutating-props
   if (!props.widget.data) props.widget.data = {};
   // eslint-disable-next-line vue/no-mutating-props
@@ -304,6 +304,10 @@ const saveConfig = () => {
   props.widget.data.apiKey = configForm.value.apiKey;
   store.markDirty();
   isConfiguring.value = false;
+  await store.saveSingleWidget(props.widget.id, {
+    data: props.widget.data,
+    enable: props.widget.enable,
+  });
   fetchWeather();
 };
 

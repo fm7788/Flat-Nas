@@ -555,6 +555,7 @@ export const useSyncStore = defineStore("sync", () => {
     if (logged) {
       if (typeof window !== "undefined" && status.value !== "OPEN") wsOpen();
       stopHttpPolling();
+      fetchAndProcessData();
     } else {
       // Guest mode: stop WS, polling, and ping checks to avoid reconnect storms
       if (status.value === "OPEN") wsClose();
