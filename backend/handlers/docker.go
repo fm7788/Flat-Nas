@@ -35,7 +35,14 @@ var statsCollecting atomic.Bool
 var lastStatsCollect time.Time
 var statsTTL = 10 * time.Second
 
+var updateCheckStop chan struct{}
+
 func InitDocker() {
+	if updateCheckStop != nil {
+		close(updateCheckStop)
+		updateCheckStop = nil
+	}
+
 	if !dockerEnabled() {
 		dockerClient = nil
 		dockerHostUsed = ""
@@ -58,7 +65,115 @@ func InitDocker() {
 		dockerInitError = err
 	} else {
 		dockerInitError = nil
+		startAutoUpdateChecker()
 	}
+}
+
+func startAutoUpdateChecker() {
+	stop := make(chan struct{})
+	updateCheckStop = stop
+
+	go func() {
+		log.Printf("[UpdateChecker] Auto update checker started (interval: 2h)")
+		doUpdateCheck()
+
+		ticker := time.NewTicker(2 * time.Hour)
+		defer ticker.Stop()
+
+		for {
+			select {
+			case <-ticker.C:
+				doUpdateCheck()
+			case <-stop:
+				log.Printf("[UpdateChecker] Auto update checker stopped")
+				return
+			}
+		}
+	}()
+}
+
+func doUpdateCheck() {
+	dc := getDockerClient()
+	if dc == nil {
+		return
+	}
+
+	updateStatusMu.Lock()
+	if updateStatus.IsChecking {
+		updateStatusMu.Unlock()
+		return
+	}
+	updateStatus.IsChecking = true
+	updateStatus.LastError = ""
+	updateStatus.CheckedCount = 0
+	updateStatus.UpdateCount = 0
+	updateStatus.Failures = nil
+	updateStatusMu.Unlock()
+
+	ctx := context.Background()
+	list, err := dc.ContainerList(ctx, container.ListOptions{All: false})
+	total := 0
+	if err == nil {
+		total = len(list)
+	}
+	updateStatusMu.Lock()
+	updateStatus.TotalCount = total
+	updateStatusMu.Unlock()
+	if err != nil {
+		updateStatusMu.Lock()
+		updateStatus.LastError = err.Error()
+		updateStatus.IsChecking = false
+		updateStatus.LastCheck = time.Now().UnixMilli()
+		updateStatusMu.Unlock()
+		return
+	}
+
+	updates := make(map[string]bool, len(list))
+	for _, ctn := range list {
+		updateStatusMu.Lock()
+		updateStatus.CheckedCount++
+		updateStatusMu.Unlock()
+
+		imageRef, ok := resolveTaggedImageRef(ctn.Image)
+		if !ok {
+			updates[ctn.ID] = false
+			continue
+		}
+		pullCtx, cancel := context.WithTimeout(ctx, 2*time.Minute)
+		rc, err := dc.ImagePull(pullCtx, imageRef, types.ImagePullOptions{})
+		cancel()
+		if err != nil {
+			addUpdateFailure(ctn, err)
+			updates[ctn.ID] = false
+			continue
+		}
+		_, _ = io.Copy(io.Discard, rc)
+		_ = rc.Close()
+
+		inspected, _, err := dc.ImageInspectWithRaw(ctx, imageRef)
+		if err != nil {
+			addUpdateFailure(ctn, err)
+			updates[ctn.ID] = false
+			continue
+		}
+		if inspected.ID != "" && inspected.ID != ctn.ImageID {
+			updateStatusMu.Lock()
+			updateStatus.UpdateCount++
+			updateStatusMu.Unlock()
+			updates[ctn.ID] = true
+		} else {
+			updates[ctn.ID] = false
+		}
+	}
+	containerUpdateMu.Lock()
+	containerUpdateCache = updates
+	containerUpdateMu.Unlock()
+	updateStatusMu.Lock()
+	updateStatus.IsChecking = false
+	updateStatus.LastCheck = time.Now().UnixMilli()
+	updateStatusMu.Unlock()
+
+	log.Printf("[UpdateChecker] Check complete: %d containers, %d updates", total, updateStatus.UpdateCount)
 }
 
 func dockerEnabled() bool {
