@@ -7,6 +7,7 @@ import { useMainStore } from "../stores/main";
 import { isInternalDomain, processSecurityUrl } from "../utils/security";
 import { parseBookmarks } from "../utils/bookmark";
 import OverlayMotion from "@/components/base/OverlayMotion.vue";
+import { VueDraggable } from "vue-draggable-plus";
 
 const props = defineProps<{ widget: WidgetConfig }>();
 const store = useMainStore();
@@ -160,10 +161,15 @@ const confirmAddCategory = async () => {
     });
     isAddingCategory.value = false;
     store.markDirty();
-    await store.saveSingleWidget(props.widget.id, {
+    const success = await store.saveSingleWidget(props.widget.id, {
       data: props.widget.data,
       enable: props.widget.enable,
     });
+    if (!success) {
+      alert("添加分类失败，请重试");
+      props.widget.data.pop();
+      await store.fetchData();
+    }
   }
 };
 
@@ -278,15 +284,33 @@ const cancelEdit = () => {
   editingLinkId.value = null;
 };
 
-const deleteItem = async (catId: string, linkId?: string) => {
-  if (!confirm("确定删除吗？")) return;
+const toggleCategory = async (cat: BookmarkCategory) => {
+  cat.collapsed = !cat.collapsed;
+  store.markDirty();
+  await store.saveSingleWidget(props.widget.id, {
+    data: props.widget.data,
+    enable: props.widget.enable,
+  });
+};
 
+const onBookmarkDragEnd = async () => {
+  store.markDirty();
+  await store.saveSingleWidget(props.widget.id, {
+    data: props.widget.data,
+    enable: props.widget.enable,
+  });
+};
+
+const isBookmarkDraggable = computed(() => store.isLogged);
+
+const deleteItem = async (catId: string, linkId?: string) => {
   if (!props.widget.data) return;
 
   const catIndex = props.widget.data.findIndex((c: BookmarkCategory) => c.id === catId);
   if (catIndex === -1) return;
 
   if (linkId) {
+    if (!confirm("确定删除这个书签吗？")) return;
     const childIndex = props.widget.data[catIndex].children.findIndex(
       (c: BookmarkItem | BookmarkCategory) => c.id === linkId,
     );
@@ -297,10 +321,14 @@ const deleteItem = async (catId: string, linkId?: string) => {
     props.widget.data.splice(catIndex, 1);
   }
   store.markDirty();
-  await store.saveSingleWidget(props.widget.id, {
+  const success = await store.saveSingleWidget(props.widget.id, {
     data: props.widget.data,
     enable: props.widget.enable,
   });
+  if (!success) {
+    alert("删除失败，请重试");
+    await store.fetchData();
+  }
 };
 
 const openUrl = (url: string) => {
@@ -387,26 +415,26 @@ const handleScrollIsolation = (e: WheelEvent) => {
     <div class="flex-1 overflow-y-auto p-3 space-y-4 scrollbar-hide" @wheel="handleScrollIsolation">
       <div
         v-if="isAddingCategory"
-        class="mb-4 p-3 bg-white/5 rounded-xl border border-white/10 animate-fade-in"
+        class="mb-4 p-3 bg-white/5 rounded-xl border border-white/10 animate-fade-in min-w-0 w-full"
       >
         <div class="text-xs font-bold text-white/80 mb-2">添加新分类</div>
-        <div class="flex gap-2">
+        <div class="flex gap-2 items-center">
           <input
             ref="categoryInputRef"
             v-model="newCategoryTitle"
             placeholder="分类名称"
-            class="flex-1 text-sm px-3 py-2 rounded-lg border bg-white/10 text-white placeholder-white/50 focus:outline-none focus:border-white/40"
+            class="min-w-0 flex-1 text-sm px-3 py-2 rounded-lg border bg-white/10 text-white placeholder-white/50 focus:outline-none focus:border-white/40"
             @keyup.enter="confirmAddCategory"
           />
           <button
             @click="confirmAddCategory"
-            class="bg-white/20 text-white text-xs px-3 py-2 rounded-lg hover:bg-white/30 whitespace-nowrap"
+            class="text-white text-xs px-4 py-2 rounded-lg hover:bg-white/30 whitespace-nowrap bg-white/20"
           >
             确定
           </button>
           <button
             @click="cancelAddCategory"
-            class="bg-white/10 text-white/70 text-xs px-3 py-2 rounded-lg hover:bg-white/20 whitespace-nowrap"
+            class="text-white/70 text-xs px-4 py-2 rounded-lg hover:bg-white/20 whitespace-nowrap bg-white/10"
           >
             取消
           </button>
@@ -417,7 +445,7 @@ const handleScrollIsolation = (e: WheelEvent) => {
         <div class="flex items-center justify-between mb-2 group/cat border-b border-white/10 pb-1">
           <span
             class="font-bold text-sm flex items-center gap-1 cursor-pointer select-none text-white/70"
-            @click="cat.collapsed = !cat.collapsed"
+            @click="toggleCategory(cat)"
           >
             <span
               class="transform transition-transform text-xs"
@@ -437,7 +465,7 @@ const handleScrollIsolation = (e: WheelEvent) => {
               + 添加
             </button>
             <button
-              @click="deleteItem(cat.id)"
+              @click.stop="deleteItem(cat.id)"
               class="text-white/50 hover:text-white/80 text-xs"
             >
               删除分类
@@ -446,50 +474,73 @@ const handleScrollIsolation = (e: WheelEvent) => {
         </div>
 
         <div v-if="!cat.collapsed" class="flex flex-col gap-1">
-          <div
-            v-for="link in (cat.children || [])"
-            :key="link.id"
-            class="flex items-center gap-2 px-2 py-1.5 hover:bg-white/10 rounded-lg cursor-pointer transition-all group/link border border-transparent hover:border-white/10"
-            @click.stop="openUrl(link.url)"
-            :title="`${link.title}\n${link.url}`"
+          <VueDraggable
+            v-model="cat.children"
+            :animation="150"
+            :group="{ name: 'bookmarks', pull: true, put: true }"
+            handle=".drag-handle"
+            @end="onBookmarkDragEnd"
+            :disabled="!isBookmarkDraggable"
           >
             <div
-              class="w-5 h-5 rounded bg-white/10 flex items-center justify-center shrink-0 overflow-hidden border border-white/10"
+              v-for="link in cat.children"
+              :key="link.id"
+              class="flex items-center gap-2 px-2 py-1.5 hover:bg-white/10 rounded-lg cursor-pointer transition-all group/link border border-transparent hover:border-white/10"
+              :class="{ 'cursor-grab': store.isLogged, 'dragging': false }"
+              @click.stop="openUrl('url' in link ? (link as BookmarkItem).url : '')"
+              :title="`${link.title}\n${'url' in link ? (link as BookmarkItem).url : ''}`"
             >
-              <img
-                :src="store.getAssetUrl(link.icon)"
-                class="w-4 h-4 object-cover"
-                @error="link.icon = 'https://www.favicon.vip/get.php?url=unknown'"
-              />
-            </div>
+              <div
+                v-if="store.isLogged"
+                class="drag-handle w-3 h-5 flex items-center justify-center shrink-0 cursor-grab text-white/30 hover:text-white/60"
+              >
+                <svg class="w-2.5 h-2.5" fill="currentColor" viewBox="0 0 20 20">
+                  <circle cx="7" cy="4" r="1.5"/>
+                  <circle cx="13" cy="4" r="1.5"/>
+                  <circle cx="7" cy="10" r="1.5"/>
+                  <circle cx="13" cy="10" r="1.5"/>
+                  <circle cx="7" cy="16" r="1.5"/>
+                  <circle cx="13" cy="16" r="1.5"/>
+                </svg>
+              </div>
+              <div
+                class="w-5 h-5 rounded bg-white/10 flex items-center justify-center shrink-0 overflow-hidden border border-white/10"
+              >
+                <img
+                  :src="store.getAssetUrl('url' in link ? (link as BookmarkItem).icon || '' : '')"
+                  class="w-4 h-4 object-cover"
+                  @error="('url' in link) && ((link as BookmarkItem).icon = 'https://www.favicon.vip/get.php?url=unknown')"
+                />
+              </div>
 
-            <div class="min-w-0 flex-1">
-              <span
-                class="block font-medium text-xs truncate text-white/80 group-hover:text-white leading-5"
-                >{{ link.title }}</span
-              >
-            </div>
+              <div class="min-w-0 flex-1">
+                <span
+                  class="block font-medium text-xs truncate text-white/80 group-hover:text-white leading-5"
+                  >{{ link.title }}</span
+                >
+              </div>
 
-            <div
-              v-if="store.isLogged"
-              class="flex gap-0.5 ml-auto pl-1 opacity-0 group-hover/link:opacity-100 transition-opacity"
-            >
-              <button
-                @click.stop="startEdit($event, cat, link)"
-                class="text-white/60 hover:text-white px-1 py-0.5 text-xs"
-                title="编辑"
+              <div
+                v-if="store.isLogged && 'url' in link"
+                class="flex gap-0.5 ml-auto pl-1 opacity-0 group-hover/link:opacity-100 transition-opacity"
               >
-                ✎
-              </button>
-              <button
-                @click.stop="deleteItem(cat.id, link.id)"
-                class="text-white/50 hover:text-white/80 px-1 py-0.5 text-xs"
-                title="删除"
-              >
-                ×
-              </button>
+                <button
+                  @click.stop="startEdit($event, cat, link as BookmarkItem)"
+                  class="text-white/60 hover:text-white px-1 py-0.5 text-xs"
+                  title="编辑"
+                >
+                  ✎
+                </button>
+                <button
+                  @click.stop="deleteItem(cat.id, link.id)"
+                  class="text-white/50 hover:text-white/80 px-1 py-0.5 text-xs"
+                  title="删除"
+                >
+                  ×
+                </button>
+              </div>
             </div>
-          </div>
+          </VueDraggable>
 
           <div
             v-if="(cat.children || []).length === 0 && activeCategoryId !== cat.id"

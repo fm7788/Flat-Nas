@@ -95,7 +95,7 @@ export const useNetworkStore = defineStore("network", () => {
       if (conn && typeof conn.addEventListener === "function") {
         conn.addEventListener("change", () => {
           console.log("[Network] Connection type changed, rebuilding WS");
-          if (getStatusValue() === "OPEN") { try { wsSendRaw("close"); } catch { } }
+          if (getStatusValue() === "OPEN") { try { wsClose(); } catch { } }
           setTimeout(() => wsOpen(), 1000);
         });
       }

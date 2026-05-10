@@ -1,6 +1,10 @@
 package handlers
 
 import (
+	"crypto"
+	"crypto/ed25519"
+	"crypto/x509"
+	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -387,10 +391,192 @@ func weatherTTL(p WeatherPayload) time.Duration {
 	return 10 * time.Minute
 }
 
+func generateQWeatherJWT(projectID, keyID, privateKeyPEM string) (string, error) {
+	privBlock := strings.ReplaceAll(privateKeyPEM, "-----BEGIN PRIVATE KEY-----", "")
+	privBlock = strings.ReplaceAll(privBlock, "-----END PRIVATE KEY-----", "")
+	privBlock = strings.TrimSpace(privBlock)
+	privateKeyBytes, err := base64.StdEncoding.DecodeString(privBlock)
+	if err != nil {
+		return "", fmt.Errorf("decode private key: %v", err)
+	}
+
+	privateKey, err := x509.ParsePKCS8PrivateKey(privateKeyBytes)
+	if err != nil {
+		return "", fmt.Errorf("parse private key: %v", err)
+	}
+
+	ed25519Key, ok := privateKey.(ed25519.PrivateKey)
+	if !ok {
+		return "", fmt.Errorf("private key is not Ed25519")
+	}
+
+	headerJSON := fmt.Sprintf(`{"alg":"EdDSA","kid":"%s"}`, keyID)
+	iat := time.Now().Unix() - 30
+	exp := iat + 900
+	payloadJSON := fmt.Sprintf(`{"sub":"%s","iat":%d,"exp":%d}`, projectID, iat, exp)
+
+	headerB64 := base64.RawURLEncoding.EncodeToString([]byte(headerJSON))
+	payloadB64 := base64.RawURLEncoding.EncodeToString([]byte(payloadJSON))
+
+	signedData := headerB64 + "." + payloadB64
+
+	signature, err := ed25519Key.Sign(nil, []byte(signedData), crypto.Hash(0))
+	if err != nil {
+		return "", fmt.Errorf("sign JWT: %v", err)
+	}
+
+	signatureB64 := base64.RawURLEncoding.EncodeToString(signature)
+
+	return headerB64 + "." + payloadB64 + "." + signatureB64, nil
+}
+
+type QWeatherGeoResponse struct {
+	Code     string `json:"code"`
+	Location []struct {
+		Name string `json:"name"`
+		Id   string `json:"id"`
+		Lat  string `json:"lat"`
+		Lon  string `json:"lon"`
+	} `json:"location"`
+}
+
+type QWeatherNowResponse struct {
+	Code     string `json:"code"`
+	Now      struct {
+		Temp string `json:"temp"`
+		Text string `json:"text"`
+		Humidity string `json:"humidity"`
+	} `json:"now"`
+}
+
+type QWeatherDailyResponse struct {
+	Code  string `json:"code"`
+	Daily []struct {
+		FxDate string `json:"fxDate"`
+		TempMin string `json:"tempMin"`
+		TempMax string `json:"tempMax"`
+		TextDay string `json:"textDay"`
+	} `json:"daily"`
+}
+
+func qweatherGeoCode(city, privateKey, projectID, keyID string) (locationID, cityName string, err error) {
+	token, err := generateQWeatherJWT(projectID, keyID, privateKey)
+	if err != nil {
+		return "", "", err
+	}
+
+	geoURL := fmt.Sprintf("https://geoapi.qweather.com/v2/city/lookup?location=%s", url.QueryEscape(city))
+	req, err := http.NewRequest("GET", geoURL, nil)
+	if err != nil {
+		return "", "", err
+	}
+	req.Header.Set("Authorization", "Bearer "+token)
+
+	client, err := getSharedProxyClient()
+	if err != nil {
+		client = &http.Client{Timeout: 10 * time.Second}
+	}
+	resp, err := client.Do(req)
+	if err != nil {
+		return "", "", fmt.Errorf("geo API request failed: %v", err)
+	}
+	defer resp.Body.Close()
+
+	var geoResp QWeatherGeoResponse
+	if err := json.NewDecoder(resp.Body).Decode(&geoResp); err != nil {
+		return "", "", fmt.Errorf("geo API decode failed: %v", err)
+	}
+
+	if geoResp.Code != "200" || len(geoResp.Location) == 0 {
+		return "", "", fmt.Errorf("city not found in QWeather: %s", city)
+	}
+
+	loc := geoResp.Location[0]
+	return loc.Id, loc.Name, nil
+}
+
+func fetchQWeather(city, privateKey, projectID, keyID string) (*WeatherData, error) {
+	locationID, cityName, err := qweatherGeoCode(city, privateKey, projectID, keyID)
+	if err != nil {
+		return nil, err
+	}
+
+	token, err := generateQWeatherJWT(projectID, keyID, privateKey)
+	if err != nil {
+		return nil, err
+	}
+
+	client, err := getSharedProxyClient()
+	if err != nil {
+		client = &http.Client{Timeout: 10 * time.Second}
+	}
+
+	nowURL := fmt.Sprintf("https://devapi.qweather.com/v7/weather/now?location=%s", locationID)
+	nowReq, _ := http.NewRequest("GET", nowURL, nil)
+	nowReq.Header.Set("Authorization", "Bearer "+token)
+	nowResp, err := client.Do(nowReq)
+	if err != nil {
+		return nil, fmt.Errorf("now weather request failed: %v", err)
+	}
+	defer nowResp.Body.Close()
+
+	var nowResp2 QWeatherNowResponse
+	if err := json.NewDecoder(nowResp.Body).Decode(&nowResp2); err != nil {
+		return nil, fmt.Errorf("now weather decode failed: %v", err)
+	}
+
+	if nowResp2.Code != "200" {
+		return nil, fmt.Errorf("QWeather now API error: %s", nowResp2.Code)
+	}
+
+	data := &WeatherData{
+		Temp:     nowResp2.Now.Temp,
+		City:     cityName,
+		Text:     nowResp2.Now.Text,
+		Humidity: nowResp2.Now.Humidity + "%",
+		Today:    WeatherRange{},
+		Forecast: make([]WeatherDay, 0),
+	}
+
+	dailyURL := fmt.Sprintf("https://devapi.qweather.com/v7/weather/3d?location=%s", locationID)
+	dailyReq, _ := http.NewRequest("GET", dailyURL, nil)
+	dailyReq.Header.Set("Authorization", "Bearer "+token)
+	dailyResp, err := client.Do(dailyReq)
+	if err != nil {
+		return data, nil
+	}
+	defer dailyResp.Body.Close()
+
+	var dailyResp2 QWeatherDailyResponse
+	if err := json.NewDecoder(dailyResp.Body).Decode(&dailyResp2); err != nil {
+		return data, nil
+	}
+
+	if dailyResp2.Code == "200" && len(dailyResp2.Daily) > 0 {
+		today := dailyResp2.Daily[0]
+		data.Today = WeatherRange{
+			Min: today.TempMin,
+			Max: today.TempMax,
+		}
+		for _, d := range dailyResp2.Daily {
+			data.Forecast = append(data.Forecast, WeatherDay{
+				Date:     d.FxDate,
+				MinTempC: d.TempMin,
+				MaxTempC: d.TempMax,
+			})
+		}
+	}
+
+	return data, nil
+}
+
 func fetchWeatherFromSource(p WeatherPayload) (*WeatherData, error) {
 	p = normalizeWeatherPayload(p)
 	if p.Source == "amap" && p.Key != "" && p.Key != "wttr.in" {
 		return fetchAmap(p.City, p.Key)
+	}
+	if p.Source == "qweather" && p.PrivateKey != "" && p.ProjectId != "" && p.KeyId != "" {
+		return fetchQWeather(p.City, p.PrivateKey, p.ProjectId, p.KeyId)
 	}
 	return fetchOpenMeteo(p.City)
 }
