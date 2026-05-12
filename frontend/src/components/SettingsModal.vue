@@ -4738,7 +4738,7 @@ document.querySelector('.card-item').addEventListener('click', () => {
               <div class="text-xs text-gray-600 leading-relaxed">
                 <div class="text-sm">
                   <span class="font-medium text-gray-800">投喂人：</span>
-                  小浣熊；*俊；*牛社区主理人；*a；*甜蜜主理人；*坤；T*t;*O；*陈等
+                  <span class="font-bold text-base text-gray-900">你应爱</span>；小浣熊；*俊；*牛社区主理人；*a；*甜蜜主理人；*坤；T*t;*O；*陈等
                 </div>
                 <div class="mt-2">
                   <span class="font-medium text-gray-800">特别鸣谢意见反馈：</span>
