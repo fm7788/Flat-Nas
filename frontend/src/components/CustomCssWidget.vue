@@ -177,18 +177,37 @@ const applyWidgetJs = () => {
 
 // ─── Save / Export / Import ───────────────────────────────────────────────────
 
-const save = () => {
-  if (!canEdit.value) return;
+const isSaving = ref(false);
+
+const save = async () => {
+  if (!canEdit.value || isSaving.value) return;
   const widget = store.widgets.find((w) => w.id === props.widget.id);
-  if (widget) {
-    widget.data = {
-      title: titleContent.value,
-      html: htmlContent.value,
-      css: cssContent.value,
-      js: jsContent.value,
-    };
+  if (!widget) return;
+
+  const newData = {
+    title: titleContent.value,
+    html: htmlContent.value,
+    css: cssContent.value,
+    js: jsContent.value,
+  };
+
+  widget.data = newData;
+  isSaving.value = true;
+
+  try {
+    const success = await store.saveSingleWidget(props.widget.id, { data: newData });
+    if (success) {
+      store.markDirty();
+    } else {
+      store.markDirty();
+    }
+  } catch (e) {
+    console.error("[CustomCssWidget] save failed:", e);
     store.markDirty();
+  } finally {
+    isSaving.value = false;
   }
+
   isEditing.value = false;
   applyStyles();
   applyWidgetJs();
@@ -328,9 +347,10 @@ watch(
           <!-- Save -->
           <button
             @click="save"
-            class="px-3 py-1 bg-blue-500 text-white rounded text-xs hover:bg-blue-600"
+            :disabled="isSaving"
+            class="px-3 py-1 bg-blue-500 text-white rounded text-xs hover:bg-blue-600 disabled:opacity-50 disabled:cursor-not-allowed"
           >
-            保存
+            {{ isSaving ? '保存中...' : '保存' }}
           </button>
           <!-- Cancel -->
           <button

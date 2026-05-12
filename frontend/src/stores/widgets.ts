@@ -104,6 +104,16 @@ export const useWidgetsStore = defineStore("widgets", () => {
           ? (JSON.parse(JSON.stringify(previous.layouts)) as typeof previous.layouts)
           : undefined;
       }
+      // Preserve local widget data when it is richer than incoming server data
+      if (previous?.data && incomingWidget.data) {
+        const prevKeys = Object.keys(previous.data).length;
+        const inKeys = Object.keys(incomingWidget.data).length;
+        if (prevKeys > inKeys || (prevKeys === inKeys && JSON.stringify(previous.data) !== JSON.stringify(incomingWidget.data))) {
+          mergedBase.data = previous.data;
+        }
+      } else if (previous?.data && !incomingWidget.data) {
+        mergedBase.data = previous.data;
+      }
       return applyWidgetUiState(mergedBase);
     });
 
