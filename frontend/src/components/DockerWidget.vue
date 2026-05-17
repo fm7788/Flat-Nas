@@ -1144,7 +1144,7 @@ const getStatusColor = (state: string) => {
           <!-- 主区域：左侧资源监控 + 右侧按钮 -->
           <div class="flex items-stretch gap-3">
             <!-- 左侧：资源监控 -->
-            <div class="flex-1 flex flex-col gap-1.5 justify-center min-w-0">
+            <div class="flex-1 min-w-[200px] flex flex-col gap-1.5 justify-center">
               <!-- CPU -->
               <div class="flex flex-col gap-1">
                 <div class="flex justify-between items-center">
@@ -1184,7 +1184,7 @@ const getStatusColor = (state: string) => {
             </div>
 
             <!-- 右侧：容器信息+操作按钮 -->
-            <div class="w-40 flex flex-col gap-1 justify-center border-l border-gray-100 pl-3 shrink-0">
+            <div class="w-[212px] flex flex-col gap-1 justify-center border-l border-gray-100 pl-3 shrink-0">
               <!-- 容器名+状态 -->
               <div class="flex items-center min-w-0 mb-1">
                 <div :class="['w-2 h-2 rounded-full shrink-0', getStatusColor(c.State)]"></div>

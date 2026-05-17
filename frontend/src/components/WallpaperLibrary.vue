@@ -40,6 +40,7 @@ const loading = ref(false);
 const uploading = ref(false);
 const fileInput = ref<HTMLInputElement | null>(null);
 const wallpaperPreviewErrors = ref<Record<string, string>>({});
+let removeErrorTimer: ReturnType<typeof setTimeout> | null = null;
 
 // Confirm Modal State
 const showConfirmModal = ref(false);
@@ -176,6 +177,26 @@ const handleWallpaperPreviewError = (
     ...wallpaperPreviewErrors.value,
     [getWallpaperErrorKey(name, type)]: attemptedUrl,
   };
+  
+  if (name !== DEFAULT_WALLPAPER) {
+    if (removeErrorTimer) clearTimeout(removeErrorTimer);
+    removeErrorTimer = setTimeout(() => {
+      const list = type === "pc" ? wallpapers.value : mobileWallpapers.value;
+      const index = list.indexOf(name);
+      if (index > -1) {
+        list.splice(index, 1);
+        if (type === "pc") {
+          wallpapers.value = [...wallpapers.value];
+          store.appConfig.pcWallpaperOrder = [...wallpapers.value];
+        } else {
+          mobileWallpapers.value = [...mobileWallpapers.value];
+          store.appConfig.mobileWallpaperOrder = [...mobileWallpapers.value];
+        }
+        store.markDirty();
+      }
+      removeErrorTimer = null;
+    }, 1000);
+  }
 };
 
 const draggableList = computed({
@@ -749,6 +770,10 @@ onMounted(() => {
 });
 
 onBeforeUnmount(() => {
+  if (removeErrorTimer) {
+    clearTimeout(removeErrorTimer);
+    removeErrorTimer = null;
+  }
   cleanupPreview();
 });
 </script>
@@ -1057,13 +1082,12 @@ onBeforeUnmount(() => {
               />
               <div
                 v-if="getWallpaperPreviewError(img, activeTab === 'pc' ? 'pc' : 'mobile')"
-                class="absolute inset-0 flex flex-col items-center justify-center gap-2 px-3 text-center bg-gray-100 text-gray-500"
+                class="absolute inset-0 flex flex-col items-center justify-center gap-2 px-3 text-center bg-red-50 text-red-500 border-2 border-red-200 border-dashed"
               >
-                <span class="text-2xl">🖼️</span>
-                <span class="text-xs font-medium break-all">{{ img }}</span>
-                <span class="text-[10px] break-all opacity-70">{{
-                  getWallpaperPreviewError(img, activeTab === 'pc' ? 'pc' : 'mobile')
-                }}</span>
+                <span class="text-2xl">⚠️</span>
+                <span class="text-xs font-medium">图片已失效</span>
+                <span class="text-[10px] opacity-70">将自动移除</span>
+                <div class="w-4 h-4 border-2 border-red-300 border-t-red-500 rounded-full animate-spin"></div>
               </div>
 
               <!-- Mask Overlay for index 0 (Removed for better preview clarity) -->
