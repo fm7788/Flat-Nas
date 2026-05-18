@@ -143,6 +143,7 @@ export const useMainStore = defineStore("main", () => {
   const updateItem = groupsStore.updateItem;
   const deleteItem = groupsStore.deleteItem;
   const cleanInvalidGroups = groupsStore.cleanInvalidGroups;
+  const reorderGroups = groupsStore.reorderGroups;
 
   // ---- Widgets ----
   const widgets = computed({
@@ -315,6 +316,7 @@ export const useMainStore = defineStore("main", () => {
     updateItem,
     deleteItem,
     cleanInvalidGroups,
+    reorderGroups,
     // Widgets
     widgets,
     mergedWidgets,

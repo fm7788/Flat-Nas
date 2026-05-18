@@ -75,6 +75,14 @@ export const useGroupsStore = defineStore("groups", () => {
     }
   };
 
+  const reorderGroups = (fromIndex: number, toIndex: number) => {
+    if (fromIndex < 0 || fromIndex >= groups.value.length) return;
+    if (toIndex < 0 || toIndex >= groups.value.length) return;
+    const [moved] = groups.value.splice(fromIndex, 1);
+    if (!moved) return;
+    groups.value.splice(toIndex, 0, moved);
+  };
+
   return {
     groups,
     items,
@@ -86,5 +94,6 @@ export const useGroupsStore = defineStore("groups", () => {
     addItem,
     updateItem,
     deleteItem,
+    reorderGroups,
   };
 });

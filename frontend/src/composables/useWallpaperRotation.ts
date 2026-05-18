@@ -12,6 +12,25 @@ export function useWallpaperRotation() {
   let consecutiveFailures = 0;
   const maxConsecutiveFailures = 3;
   let backoffMultiplier = 1;
+  let errorTimer: ReturnType<typeof setTimeout> | null = null;
+
+  const clearErrorTimer = () => {
+    if (errorTimer) {
+      clearTimeout(errorTimer);
+      errorTimer = null;
+    }
+  };
+
+  const showError = (message: string, autoHide = true) => {
+    clearErrorTimer();
+    apiUpdateError.value = message;
+    if (autoHide) {
+      errorTimer = setTimeout(() => {
+        apiUpdateError.value = "";
+        errorTimer = null;
+      }, 5000);
+    }
+  };
 
   const rotate = (type: "pc" | "mobile") => {
     const list = type === "pc" ? store.wallpaperListPc : store.wallpaperListMobile;
@@ -101,13 +120,11 @@ export function useWallpaperRotation() {
 
     if (tasks.length === 0) return;
 
-    apiUpdateError.value = "";
-
     for (const task of tasks) {
       const success = await fetchAndUpdateWallpaper(task.url, task.type);
       if (!success) {
         consecutiveFailures++;
-        apiUpdateError.value = `壁纸自动更新失败，已连续失败 ${consecutiveFailures} 次`;
+        showError(`壁纸自动更新失败，已连续失败 ${consecutiveFailures} 次`);
         console.error(`[Wallpaper] Failed to update ${task.type} wallpaper`);
         return;
       }
@@ -116,6 +133,7 @@ export function useWallpaperRotation() {
     consecutiveFailures = 0;
     backoffMultiplier = 1;
     apiUpdateError.value = "";
+    clearErrorTimer();
   };
 
   const fetchAndUpdateWallpaper = async (url: string, type: "pc" | "mobile"): Promise<boolean> => {
@@ -144,7 +162,7 @@ export function useWallpaperRotation() {
       if (!uploadRes.ok) {
         console.error(`[Wallpaper] Upload failed with status ${uploadRes.status}`);
         if (uploadRes.status === 401 || uploadRes.status === 403) {
-          apiUpdateError.value = "登录已过期，请重新登录后再试";
+          showError("登录已过期，请重新登录后再试", false);
           consecutiveFailures = maxConsecutiveFailures;
         }
         return false;
@@ -200,14 +218,20 @@ export function useWallpaperRotation() {
     const pcConfig = store.appConfig.wallpaperConfig;
     const mobileConfig = store.appConfig.mobileWallpaperConfig;
 
-    if (pcConfig?.enabled || mobileConfig?.enabled) {
+    const pcEnabled = pcConfig?.enabled === true;
+    const mobileEnabled = mobileConfig?.enabled === true;
+
+    if (pcEnabled || mobileEnabled) {
       const baseInterval = 60 * 60 * 1000;
       apiUpdateTimer = setInterval(checkAndUpdateApiWallpaper, baseInterval * backoffMultiplier);
-      setTimeout(checkAndUpdateApiWallpaper, 2000);
+    } else {
+      // 配置未启用时，立即清除错误状态并重置计数器
+      resetError();
     }
   };
 
   const resetError = () => {
+    clearErrorTimer();
     apiUpdateError.value = "";
     consecutiveFailures = 0;
     backoffMultiplier = 1;
@@ -237,10 +261,16 @@ export function useWallpaperRotation() {
   );
 
   onMounted(() => {
+    // 初始化时立即清除错误状态，避免历史遗留错误显示
+    resetError();
+
     store.fetchWallpaperLists().finally(() => {
       updatePcInterval();
       updateMobileInterval();
-      updateApiScheduler();
+      // 延迟 5 秒再启动 API 调度器，给页面加载时间
+      setTimeout(() => {
+        updateApiScheduler();
+      }, 5000);
     });
   });
 
@@ -248,6 +278,7 @@ export function useWallpaperRotation() {
     if (pcInterval) clearInterval(pcInterval);
     if (mobileInterval) clearInterval(mobileInterval);
     if (apiUpdateTimer) clearInterval(apiUpdateTimer);
+    clearErrorTimer();
   });
 
   return {

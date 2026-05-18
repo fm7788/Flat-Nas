@@ -2414,6 +2414,15 @@ const checkMove = () => {
   return true;
 };
 
+const onGroupDragEnd = (evt: any) => {
+  const oldIndex = evt.oldIndex as number;
+  const newIndex = evt.newIndex as number;
+  if (oldIndex !== newIndex) {
+    store.reorderGroups(oldIndex, newIndex);
+    store.markDirty();
+  }
+};
+
 const getLayoutConfig = (group: NavGroup) => {
   const showBg = group.showCardBackground ?? store.appConfig.showCardBackground;
   const layout = group.cardLayout || store.appConfig.cardLayout;
@@ -3481,13 +3490,13 @@ onUnmounted(() => {
         </Transition>
 
         <VueDraggable
-          v-model="store.groups"
+          :model-value="store.groups"
           handle=".group-handle"
           :move="checkMove"
           :animation="300"
           :forceFallback="true"
           :disabled="!isEditMode || isWebPaginationMode"
-          @end="() => store.markDirty()"
+          @end="onGroupDragEnd"
           class="pb-20 flex flex-col transition-all"
           :style="{ gap: (store.appConfig.groupGap ?? 30) + 'px' }"
         >
