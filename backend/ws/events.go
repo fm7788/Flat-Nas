@@ -136,6 +136,10 @@ func (b *WSBroadcaster) BroadcastTodo(widgetID string, content interface{}) {
 	BroadcastTodoUpdated(b.Manager, widgetID, content)
 }
 
+func (b *WSBroadcaster) BroadcastBookmarks(widgetID string, content interface{}) {
+	BroadcastBookmarksUpdated(b.Manager, widgetID, content)
+}
+
 // BroadcastTodoUpdated REST API 保存 todo 后通过 WebSocket 广播
 func BroadcastTodoUpdated(manager *WSManager, widgetID string, content interface{}) {
 	if manager == nil {
@@ -143,6 +147,21 @@ func BroadcastTodoUpdated(manager *WSManager, widgetID string, content interface
 	}
 	replyMsg, _ := json.Marshal(map[string]interface{}{
 		"type": "todo_updated",
+		"payload": map[string]interface{}{
+			"widgetId": widgetID,
+			"content":  content,
+		},
+	})
+	manager.Broadcast(replyMsg, "")
+}
+
+// BroadcastBookmarksUpdated REST API 保存 bookmarks 后通过 WebSocket 广播
+func BroadcastBookmarksUpdated(manager *WSManager, widgetID string, content interface{}) {
+	if manager == nil {
+		return
+	}
+	replyMsg, _ := json.Marshal(map[string]interface{}{
+		"type": "bookmarks_updated",
 		"payload": map[string]interface{}{
 			"widgetId": widgetID,
 			"content":  content,

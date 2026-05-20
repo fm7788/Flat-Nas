@@ -241,7 +241,6 @@ const processIconError = () => {
     val &&
     val.startsWith("http") &&
     !val.includes("favicon.ico") &&
-    !val.includes("api.uomg.com") &&
     !val.includes("simpleicons.org") &&
     !val.includes("api.afmax.cn") &&
     !val.includes("api.quickso.cn") &&

@@ -15,10 +15,11 @@ const store = useMainStore();
 const searchQuery = ref("");
 
 const filteredData = computed(() => {
-  if (!searchQuery.value) return props.widget.data || [];
+  const data = Array.isArray(props.widget.data) ? props.widget.data : [];
+  if (!searchQuery.value) return data;
   const query = searchQuery.value.toLowerCase();
 
-  return (props.widget.data || [])
+  return data
     .map((cat: BookmarkCategory) => {
       const catMatches = cat.title.toLowerCase().includes(query);
       const children = Array.isArray(cat.children) ? cat.children : [];
@@ -55,7 +56,7 @@ watch(
 );
 
 onMounted(() => {
-  if ((!props.widget.data || props.widget.data.length === 0) && localBackup.value.length > 0) {
+  if ((!props.widget.data || !Array.isArray(props.widget.data) || props.widget.data.length === 0) && localBackup.value.length > 0) {
     props.widget.data = localBackup.value;
   }
 });
@@ -88,7 +89,7 @@ const handleFileUpload = (event: Event) => {
     try {
       const newItems = parseBookmarks(content);
       if (newItems.length > 0) {
-        if (!props.widget.data) props.widget.data = [];
+        if (!props.widget.data || !Array.isArray(props.widget.data)) props.widget.data = [];
 
         // 分离文件夹和独立的书签
         const folders: BookmarkCategory[] = [];
@@ -152,7 +153,7 @@ const addCategory = () => {
 
 const confirmAddCategory = async () => {
   if (newCategoryTitle.value) {
-    if (!props.widget.data) props.widget.data = [];
+    if (!props.widget.data || !Array.isArray(props.widget.data)) props.widget.data = [];
     props.widget.data.push({
       id: Date.now().toString(),
       title: newCategoryTitle.value,
@@ -304,7 +305,7 @@ const onBookmarkDragEnd = async () => {
 const isBookmarkDraggable = computed(() => store.isLogged);
 
 const deleteItem = async (catId: string, linkId?: string) => {
-  if (!props.widget.data) return;
+  if (!props.widget.data || !Array.isArray(props.widget.data)) return;
 
   const catIndex = props.widget.data.findIndex((c: BookmarkCategory) => c.id === catId);
   if (catIndex === -1) return;

@@ -414,19 +414,27 @@ export const useSyncStore = defineStore("sync", () => {
     if (!msg?.type) return;
     switch (msg.type) {
       case "auth_success": break;
-      case "memo_updated": case "todo_updated": {
+      case "memo_updated": case "todo_updated": case "bookmarks_updated": {
         const p = msg.payload || {};
-        if (p.widgetId) { const w = widgetsStore.widgets.find((x) => x.id === p.widgetId); if (w) w.data = p.content; }
+        if (p.widgetId) {
+          const w = widgetsStore.widgets.find((x) => x.id === p.widgetId);
+          if (w) {
+            isApplyingServerData = true;
+            w.data = p.content;
+            isApplyingServerData = false;
+          }
+        }
         break;
       }
       case "data_updated": {
         const p = msg.payload || {};
         if (p.username !== auth.username && !(auth.username === "admin" && p.username === "admin")) return;
         const sv = typeof p.version !== "undefined" ? normalizeVersion(p.version) : 0;
+        if (sv <= dataVersion.value) break;
         if (saveStore.hasUnsavedChanges || saveStore.saveTimer !== null || saveStore.isSaving) {
           if (sv > pendingServerVersion.value) pendingServerVersion.value = sv; return;
         }
-        if (typeof p.version !== "undefined") dataVersion.value = normalizeVersion(p.version);
+        dataVersion.value = sv;
         fetchAndProcessData();
         break;
       }
@@ -503,8 +511,16 @@ export const useSyncStore = defineStore("sync", () => {
   };
 
   // ---- saveData wrapper ----
-  const saveData = (immediate = false, force = false) =>
-    saveStore.saveData(immediate, force, dataVersion, rssFeeds, rssCategories, fetchAndProcessData);
+  const saveData = async (immediate = false, force = false) => {
+    const result = await saveStore.saveData(immediate, force, dataVersion, rssFeeds, rssCategories, fetchAndProcessData);
+    if (result === "saved" && pendingServerVersion.value > 0 && pendingServerVersion.value > dataVersion.value) {
+      const psv = pendingServerVersion.value;
+      pendingServerVersion.value = 0;
+      dataVersion.value = psv;
+      await fetchAndProcessData();
+    }
+    return result;
+  };
 
   const resolveConflict = (action: "remote" | "local") =>
     saveStore.resolveConflict(action, fetchAndProcessData, saveData);
@@ -519,7 +535,7 @@ export const useSyncStore = defineStore("sync", () => {
   if (typeof window !== "undefined") {
     networkStore.initEventBindings(
       wsOpen,
-      wsSendRaw,
+      wsClose,
       () => status.value,
       () => saveStore.triggerOfflineQueueReplay(fetchVersionOnly, dataVersion, networkStore.getHeaders),
     );
@@ -568,6 +584,14 @@ export const useSyncStore = defineStore("sync", () => {
   watch(widgetsStore.widgets, markDirtyIfActive, { deep: true });
   watch(rssFeeds, markDirtyIfActive, { deep: true });
   watch(rssCategories, markDirtyIfActive, { deep: true });
+  watch(() => saveStore.hasUnsavedChanges, (dirty, wasDirty) => {
+    if (wasDirty && !dirty && pendingServerVersion.value > 0 && pendingServerVersion.value > dataVersion.value && !saveStore.isSaving) {
+      const psv = pendingServerVersion.value;
+      pendingServerVersion.value = 0;
+      dataVersion.value = psv;
+      fetchAndProcessData();
+    }
+  });
   watch(status, (newStatus) => { if (newStatus === "OPEN") { networkStore.lastPingAt = Date.now(); startPingCheck(); } else { stopPingCheck(); stopWsHealthCheck(); } });
 
   watch(wsUrl, (newUrl, oldUrl) => {

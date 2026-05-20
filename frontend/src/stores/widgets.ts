@@ -104,14 +104,7 @@ export const useWidgetsStore = defineStore("widgets", () => {
           ? (JSON.parse(JSON.stringify(previous.layouts)) as typeof previous.layouts)
           : undefined;
       }
-      // Preserve local widget data when it is richer than incoming server data
-      if (previous?.data && incomingWidget.data) {
-        const prevKeys = Object.keys(previous.data).length;
-        const inKeys = Object.keys(incomingWidget.data).length;
-        if (prevKeys > inKeys || (prevKeys === inKeys && JSON.stringify(previous.data) !== JSON.stringify(incomingWidget.data))) {
-          mergedBase.data = previous.data;
-        }
-      } else if (previous?.data && !incomingWidget.data) {
+      if (previous?.data && !incomingWidget.data) {
         mergedBase.data = previous.data;
       }
       return applyWidgetUiState(mergedBase);
@@ -175,7 +168,7 @@ export const useWidgetsStore = defineStore("widgets", () => {
   ): Promise<boolean> => {
     try {
       const w = widgets.value.find((x) => x.id === widgetId);
-      const widgetVersion = w ? (w as unknown as Record<string, unknown>)["widgetVersion"] ?? 0 : 0;
+      const widgetVersion = w ? Number((w as unknown as Record<string, unknown>)["widgetVersion"] ?? 0) : 0;
       const body = { ...payload, version: dataVersion.value, widgetVersion };
       const res = await fetch(`/api/widgets/${encodeURIComponent(widgetId)}`, {
         method: "PUT",
@@ -187,11 +180,38 @@ export const useWidgetsStore = defineStore("widgets", () => {
         if (result && typeof (result as { version?: number }).version !== "undefined") {
           dataVersion.value = Math.max(0, Math.floor((result as { version?: number }).version));
         }
-        // Update widget-level version if returned
         if (w && result && typeof (result as { widgetVersion?: number }).widgetVersion !== "undefined") {
           (w as unknown as Record<string, unknown>)["widgetVersion"] = (result as { widgetVersion?: number }).widgetVersion;
         }
         return true;
+      }
+      if (res.status === 409) {
+        const result = await res.json().catch(() => null);
+        const serverVersion = (result as { currentVersion?: number })?.currentVersion;
+        const serverWidgetVersion = (result as { widgetVersion?: number })?.widgetVersion;
+        if (typeof serverVersion === "number") {
+          dataVersion.value = serverVersion;
+        }
+        if (w && typeof serverWidgetVersion === "number") {
+          (w as unknown as Record<string, unknown>)["widgetVersion"] = serverWidgetVersion;
+        }
+        const retryBody = { ...payload, version: dataVersion.value, widgetVersion: typeof serverWidgetVersion === "number" ? serverWidgetVersion + 1 : widgetVersion + 1 };
+        const retry = await fetch(`/api/widgets/${encodeURIComponent(widgetId)}`, {
+          method: "PUT",
+          headers: { ...getHeaders(), "Content-Type": "application/json" },
+          body: JSON.stringify(retryBody),
+        });
+        if (retry.ok) {
+          const retryResult = await retry.json().catch(() => null);
+          if (retryResult && typeof (retryResult as { version?: number }).version !== "undefined") {
+            dataVersion.value = Math.max(0, Math.floor((retryResult as { version?: number }).version));
+          }
+          if (w && retryResult && typeof (retryResult as { widgetVersion?: number }).widgetVersion !== "undefined") {
+            (w as unknown as Record<string, unknown>)["widgetVersion"] = (retryResult as { widgetVersion?: number }).widgetVersion;
+          }
+          return true;
+        }
+        console.warn(`[saveSingleWidget] Retry after 409 also failed for ${widgetId}`);
       }
       return false;
     } catch (e) {

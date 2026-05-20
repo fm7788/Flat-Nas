@@ -167,6 +167,10 @@ func SaveSingleWidget(c *gin.Context) {
 		if b := ws.GetBroadcaster(); b != nil {
 			ws.BroadcastTodoUpdated(b.Manager, widgetID, payload["data"])
 		}
+	case "bookmarks":
+		if b := ws.GetBroadcaster(); b != nil {
+			ws.BroadcastBookmarksUpdated(b.Manager, widgetID, payload["data"])
+		}
 	}
 
 	resp := gin.H{

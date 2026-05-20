@@ -41,6 +41,8 @@ const normalizeTodoItems = (value: unknown): TodoItem[] => {
     .filter((item): item is TodoItem => item !== null);
 };
 
+const todoItems = computed(() => normalizeTodoItems(props.widget.data));
+
 const stopPolling = () => {
   if (pollTimer) {
     clearTimeout(pollTimer);
@@ -123,11 +125,13 @@ const persistSave = useDebounceFn(async () => {
   if (!store.isLogged) return;
   saveStatus.value = "saving";
   try {
-    await store.saveSingleWidget(props.widget.id, {
+    const ok = await store.saveSingleWidget(props.widget.id, {
       data: props.widget.data,
       enable: props.widget.enable,
     });
-    pushUpdate();
+    if (ok) {
+      pushUpdate();
+    }
   } finally {
     saveStatus.value = "saved";
     scheduleNextPoll();
@@ -136,20 +140,39 @@ const persistSave = useDebounceFn(async () => {
 
 // 本地持久化备份：防止网络断开时数据丢失
 const localBackup = useStorage<TodoItem[]>(`flatnas-todo-backup-${props.widget.id}`, []);
+// 记录最后一次清空操作的时间戳，用于区分"主动清空"和"数据丢失"
+const lastClearedAt = useStorage<number>(`flatnas-todo-last-cleared-${props.widget.id}`, 0);
 
 watch(
   () => props.widget.data,
   (newVal) => {
-    if (newVal) localBackup.value = newVal;
+    const isRecentLocalChange = Date.now() - lastLocalMutationAt < 2000;
+    
+    // 只有当新值是有效数据时才更新备份
+    if (Array.isArray(newVal) && newVal.length > 0) {
+      localBackup.value = newVal;
+    }
+    // 如果是用户主动清空（在最近2秒内有过本地操作），记录清空时间戳
+    // 这样下次刷新页面时就不会错误恢复了
+    if (isRecentLocalChange && (!Array.isArray(newVal) || newVal.length === 0)) {
+      localBackup.value = [];
+      lastClearedAt.value = Date.now();
+    }
     // Removed auto-save here to prevent loop with backend updates
   },
   { deep: true },
 );
 
 onMounted(() => {
-  // 如果服务端数据为空，但本地有备份，则恢复备份
-  if ((!props.widget.data || props.widget.data.length === 0) && localBackup.value.length > 0) {
+  const isEmptyData = !Array.isArray(props.widget.data) || props.widget.data.length === 0;
+  const hasBackup = localBackup.value.length > 0;
+  const isRecentClear = Date.now() - lastClearedAt.value < 60000; // 1分钟内的清空操作
+
+  // 只有当：1.数据为空 2.有备份 3.不是最近的主动清空，才恢复备份
+  if (isEmptyData && hasBackup && !isRecentClear) {
     props.widget.data = localBackup.value;
+    // 立即保存，确保恢复的数据同步到服务端
+    persistSave();
   }
   if (store.isLogged && !shouldUseSocket.value) {
     void pollRemote(true);
@@ -163,13 +186,12 @@ onUnmounted(() => {
 const handleSave = () => {
   lastLocalMutationAt = Date.now();
   saveStatus.value = "unsaved";
-  pushUpdate();
   persistSave();
 };
 
 const add = () => {
   if (!newItem.value) return;
-  if (!props.widget.data) props.widget.data = [];
+  if (!Array.isArray(props.widget.data)) props.widget.data = [];
   props.widget.data.push({ id: Date.now().toString(), text: newItem.value, done: false });
   newItem.value = "";
   handleSave();
@@ -178,6 +200,7 @@ const add = () => {
 const remove = (index: number | string) => {
   const targetIndex = typeof index === "string" ? Number(index) : index;
   if (Number.isNaN(targetIndex)) return;
+  if (!Array.isArray(props.widget.data)) return;
   props.widget.data.splice(targetIndex, 1);
   handleSave();
 };
@@ -248,12 +271,12 @@ const handleScrollIsolation = (e: WheelEvent) => {
         </span>
       </div>
       <span class="text-[10px] text-white/60"
-        >{{ widget.data?.filter((i: TodoItem) => !i.done).length || 0 }} 待完成</span
+        >{{ todoItems.filter((i: TodoItem) => !i.done).length || 0 }} 待完成</span
       >
     </div>
 
     <div class="flex-1 overflow-y-auto space-y-1 scrollbar-hide" @wheel="handleScrollIsolation">
-      <div v-for="(item, idx) in widget.data" :key="item.id" class="flex items-start gap-2 group">
+      <div v-for="(item, idx) in todoItems" :key="item.id" class="flex items-start gap-2 group">
         <input
           type="checkbox"
           v-model="item.done"
@@ -273,7 +296,7 @@ const handleScrollIsolation = (e: WheelEvent) => {
           删除
         </button>
       </div>
-      <div v-if="!widget.data?.length" class="text-xs text-white/50 text-center py-2">
+      <div v-if="!todoItems.length" class="text-xs text-white/50 text-center py-2">
         无待办事项
       </div>
     </div>

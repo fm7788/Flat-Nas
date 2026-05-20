@@ -76,7 +76,7 @@ export const parseBookmarks = (html: string): (BookmarkItem | BookmarkCategory)[
             a.getAttribute("ICON_URI");
           if (!icon) {
             try {
-              icon = `https://api.uomg.com/api/get.favicon?url=${new URL(url).hostname}`;
+              icon = `https://www.favicon.vip/get.php?url=${encodeURIComponent(url)}`;
             } catch {
               icon = "";
             }

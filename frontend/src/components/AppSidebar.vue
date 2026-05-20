@@ -366,6 +366,10 @@ const handleDeleteBookmark = (category: BookmarkCategory, itemId: string) => {
   if (!store.isLogged) return;
   category.children = category.children.filter((item) => item.id !== itemId);
   store.markDirty();
+  const widget = store.widgets.find((w) => w.type === "bookmarks");
+  if (widget) {
+    store.saveSingleWidget(widget.id, { data: widget.data, enable: widget.enable });
+  }
 };
 
 const handleDeleteCategory = (categoryId: string) => {
@@ -379,6 +383,7 @@ const handleDeleteCategory = (categoryId: string) => {
           activeCategory.value = null;
         }
         store.markDirty();
+        store.saveSingleWidget(widget.id, { data: widget.data, enable: widget.enable });
         return;
       }
     }
@@ -579,7 +584,7 @@ const confirmEditBookmark = async () => {
       // Auto fetch icon if empty
       if (!item.icon) {
         try {
-          item.icon = `https://api.uomg.com/api/get.favicon?url=${new URL(item.url).hostname}`;
+          item.icon = `https://www.favicon.vip/get.php?url=${encodeURIComponent(item.url)}`;
         } catch {
           // ignore
         }
@@ -1065,7 +1070,7 @@ const toggle = () => {
                       (category as BookmarkCategory).type === 'category' || 'children' in category
                     "
                   >
-                    {{ category.title.substring(0, 2) }}
+                    {{ (category.title || '').substring(0, 2) }}
                   </template>
                   <img
                     v-else-if="getLinkIcon(category as BookmarkItem)"
@@ -1074,7 +1079,7 @@ const toggle = () => {
                     alt=""
                   />
                   <span v-else class="text-[10px] font-bold opacity-70 leading-none">{{
-                    category.title.substring(0, 1).toUpperCase()
+                    (category.title || '').substring(0, 1).toUpperCase()
                   }}</span>
                 </div>
                 <span v-if="!isCollapsed" class="truncate text-base md:text-xs">{{
@@ -1138,7 +1143,7 @@ const toggle = () => {
                     alt=""
                   />
                   <span v-else class="text-[10px] font-bold opacity-70 leading-none">{{
-                    item.title.substring(0, 1).toUpperCase()
+                    (item.title || '').substring(0, 1).toUpperCase()
                   }}</span>
                 </div>
 
@@ -1322,7 +1327,7 @@ const toggle = () => {
                         "
                       />
                       <span v-else class="text-[10px] font-bold opacity-70 leading-none">{{
-                        item.title.substring(0, 2).toUpperCase()
+                        (item.title || '').substring(0, 2).toUpperCase()
                       }}</span>
                     </div>
 
@@ -1420,7 +1425,7 @@ const toggle = () => {
                 alt=""
               />
               <span v-else class="text-[10px] font-bold opacity-70 leading-none">{{
-                group.title.substring(0, 2)
+                (group.title || '').substring(0, 2)
               }}</span>
             </div>
 
@@ -1479,7 +1484,7 @@ const toggle = () => {
                 alt=""
               />
               <span v-else class="text-[10px] font-bold opacity-70 leading-none">{{
-                group.title.substring(0, 2)
+                (group.title || '').substring(0, 2)
               }}</span>
             </div>
             <span

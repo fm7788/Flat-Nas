@@ -1,4 +1,4 @@
-import { ref, computed } from "vue";
+import { ref } from "vue";
 import { defineStore } from "pinia";
 import { useAuthStore } from "./auth";
 import { useConfigStore } from "./config";
@@ -80,7 +80,7 @@ export const useNetworkStore = defineStore("network", () => {
   // ---- Network events ----
   const bindNetworkEvents = (
     wsOpen: () => void,
-    wsSendRaw: (data: string) => void,
+    wsClose: () => void,
     getStatusValue: () => string,
     triggerOfflineQueueReplay: () => void,
   ) => {
@@ -375,9 +375,9 @@ export const useNetworkStore = defineStore("network", () => {
     // Avoid probing a non-existent REST endpoint and spamming 404s.
   };
 
-  const initEventBindings = (wsOpen: () => void, wsSendRaw: (data: string) => void, getStatusValue: () => string, triggerOfflineQueueReplay: () => void) => {
+  const initEventBindings = (wsOpen: () => void, wsClose: () => void, getStatusValue: () => string, triggerOfflineQueueReplay: () => void) => {
     bindWeatherNetworkEvents();
-    bindNetworkEvents(wsOpen, wsSendRaw, getStatusValue, triggerOfflineQueueReplay);
+    bindNetworkEvents(wsOpen, wsClose, getStatusValue, triggerOfflineQueueReplay);
     if (typeof window !== "undefined") {
       window.addEventListener("beforeunload", () => { configStore.isPageUnloading = true; });
       window.addEventListener("pagehide", () => { configStore.isPageUnloading = true; });
