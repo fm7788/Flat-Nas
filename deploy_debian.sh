@@ -307,7 +307,7 @@ server {
     }
 
     location /api/ {
-        proxy_pass http://127.0.0.1:${backend_port}/api/;
+        proxy_pass http://127.0.0.1:${backend_port};
         proxy_set_header Host \$host;
         proxy_set_header X-Real-IP \$remote_addr;
         proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
@@ -320,13 +320,13 @@ server {
     }
 
     location /socket.io/ {
-        proxy_pass http://127.0.0.1:${backend_port}/socket.io/;
-        proxy_set_header Host $host;
-        proxy_set_header X-Real-IP $remote_addr;
-        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_pass http://127.0.0.1:${backend_port};
+        proxy_set_header Host \$host;
+        proxy_set_header X-Real-IP \$remote_addr;
+        proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto \$scheme;
         proxy_http_version 1.1;
-        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Upgrade \$http_upgrade;
         proxy_set_header Connection "upgrade";
     }
 }
@@ -359,7 +359,7 @@ server {
     }
 
     location /api/ {
-        proxy_pass http://127.0.0.1:${backend_port}/api/;
+        proxy_pass http://127.0.0.1:${backend_port};
         proxy_set_header Host \$host;
         proxy_set_header X-Real-IP \$remote_addr;
         proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
@@ -372,13 +372,13 @@ server {
     }
 
     location /socket.io/ {
-        proxy_pass http://127.0.0.1:${backend_port}/socket.io/;
-        proxy_set_header Host $host;
-        proxy_set_header X-Real-IP $remote_addr;
-        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_pass http://127.0.0.1:${backend_port};
+        proxy_set_header Host \$host;
+        proxy_set_header X-Real-IP \$remote_addr;
+        proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto \$scheme;
         proxy_http_version 1.1;
-        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Upgrade \$http_upgrade;
         proxy_set_header Connection "upgrade";
     }
 }
@@ -656,6 +656,16 @@ install_flow() {
   init_data_dir "PC" "${PC_DIR}" "${source_dir}"
   init_data_dir "APP" "${APP_DIR}" "${source_dir}"
   init_data_dir "doc" "${DOC_DIR}" "${source_dir}"
+  
+  if [ -z "$(ls -A "${PUBLIC_DIR}" 2>/dev/null)" ]; then
+    log_warn "前端静态目录为空，尝试从 ${static_src} 重新复制..."
+    if [ -d "${static_src}" ]; then
+      cp -a "${static_src}/." "${PUBLIC_DIR}/"
+      log_info "前端静态文件已补充复制"
+    else
+      log_warn "源目录 ${static_src} 不存在，前端可能无法正常访问"
+    fi
+  fi
   
   # 6. 设置权限
   log_info "设置权限..."
