@@ -149,17 +149,19 @@ sudo ./manage.sh
 
 #### Debian/Ubuntu 卸载（命令行）
 
-如果需要卸载，也可以直接运行管理脚本并选择“卸载服务”。
+如果需要卸载，也可以直接运行部署脚本并选择卸载模式，或运行管理脚本并选择"卸载服务"。
 
 ```bash
-sudo ./debian/manage.sh
+sudo ./deploy_debian.sh uninstall
+# 或
+sudo ./manage.sh
 ```
 
 ### 2. 本地安装（Release 包）
 
 适用于已能访问服务器的场景，上传 Release 包内容后直接运行。
 
-1. 从 GitHub Releases 下载 `release.zip`
+1. 从 GitHub Releases 下载对应架构的 `flatnas-amd64.zip` 或 `flatnas-arm64.zip`
 2. 上传到服务器并解压到任意目录（例如 `/opt/flatnas`）
 3. 进入解压目录并启动服务
 

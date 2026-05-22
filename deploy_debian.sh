@@ -7,6 +7,7 @@ IFS=$'\n\t'
 # 说明：
 #   本脚本基于 debian/deploy.sh 和 debian/manage.sh 整合优化而来。
 #   支持从 GitHub Releases 自动拉取最新版本进行一键部署。
+#   自动检测系统架构 (amd64/arm64)，下载对应的 flatnas-{arch}.zip。
 #   包含安全卸载和版本回滚功能。
 #
 # 使用方式：
@@ -17,14 +18,23 @@ IFS=$'\n\t'
 #      sudo ./deploy_debian.sh
 #
 # 前置要求：
-#   - 确保 GitHub 仓库 (Garry-QD/FlatNas) 发布了包含 release.zip 的 Release。
-#   - release.zip 应包含 flatnas-server 二进制和 server/public 目录。
+#   - 确保 GitHub 仓库 (Garry-QD/FlatNas) 发布了包含 flatnas-amd64.zip / flatnas-arm64.zip 的 Release。
+#   - zip 包应包含 flatnas-server 二进制和 server/public 目录。
 
 MODE="${1:-install}"
 
 # ==========================================
 # 基础配置与变量
 # ==========================================
+
+ARCH_RAW="$(uname -m)"
+case "${ARCH_RAW}" in
+  x86_64)  ARCH="amd64" ;;
+  aarch64) ARCH="arm64" ;;
+  armv7l)  ARCH="arm64" ;;
+  *)       ARCH="" ;;
+esac
+
 APP_NAME="flatnas"
 APP_USER="flatnas"
 SERVICE_NAME="flatnas"
@@ -514,9 +524,14 @@ backup_current() {
 install_flow() {
   require_root
   require_debian
+
+  if [ -z "${ARCH}" ]; then
+    fail_with_tip "不支持的系统架构: ${ARCH_RAW}" "目前仅支持 x86_64 (amd64) 和 aarch64/armv7l (arm64)"
+  fi
   
   echo "=============================="
   echo "   FlatNas 一键部署脚本"
+  echo "   架构: ${ARCH}"
   echo "=============================="
   
   # 1. 配置收集
@@ -553,12 +568,12 @@ install_flow() {
   # 注册清理函数，确保退出时删除临时目录
   trap 'rm -rf "${tmp_dir}"' EXIT
 
-  local download_url="https://github.com/Garry-QD/FlatNas/releases/latest/download/release.zip"
-  local zip_file="${tmp_dir}/release.zip"
+  local download_url="https://github.com/Garry-QD/FlatNas/releases/latest/download/flatnas-${ARCH}.zip"
+  local zip_file="${tmp_dir}/flatnas-${ARCH}.zip"
   
   log_info "下载: ${download_url}"
   if ! wget -O "${zip_file}" "${download_url}"; then
-    fail_with_tip "下载失败，请检查网络或确认 GitHub Release 是否存在 release.zip"
+    fail_with_tip "下载失败，请检查网络或确认 GitHub Release 是否存在 flatnas-${ARCH}.zip"
   fi
   
   log_info "解压资源..."
