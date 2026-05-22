@@ -1,14 +1,15 @@
 # Stage 1: Build Frontend
 FROM node:20.19-bookworm-slim AS frontend-builder
 
-# 1. 接收构建参数（代理地址）
+# 1. 接收构建参数（代理地址 + 镜像源）
 ARG HTTP_PROXY
 ARG HTTPS_PROXY
+ARG NPM_REGISTRY
 
 # 2. 设置环境变量
 ENV HTTP_PROXY=$HTTP_PROXY \
     HTTPS_PROXY=$HTTPS_PROXY \
-    NPM_CONFIG_REGISTRY=https://registry.npmmirror.com
+    NPM_CONFIG_REGISTRY=${NPM_REGISTRY:-https://registry.npmjs.org}
 
 WORKDIR /app
 
@@ -37,8 +38,7 @@ FROM --platform=$BUILDPLATFORM golang:alpine AS backend-builder
 # 接收构建参数
 ARG HTTP_PROXY
 ARG HTTPS_PROXY
-# Go Proxy 设置，默认使用 goproxy.cn
-ARG GOPROXY=https://goproxy.cn,direct
+ARG GOPROXY=https://proxy.golang.org,direct
 
 ENV HTTP_PROXY=$HTTP_PROXY \
     HTTPS_PROXY=$HTTPS_PROXY \
