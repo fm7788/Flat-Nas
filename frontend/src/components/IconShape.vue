@@ -1,8 +1,7 @@
 <script setup lang="ts">
-import { computed } from "vue";
+import { computed, ref, watch } from "vue";
 import { useMainStore } from "../stores/main";
 
-// 生成唯一ID，避免多个组件实例间clipPath冲突
 const uid = Math.random().toString(36).slice(2, 9);
 const maskId = `icon-mask-${uid}`;
 const store = useMainStore();
@@ -13,7 +12,32 @@ const props = defineProps<{
   bgClass?: string;
   icon?: string;
   imgScale?: number;
+  title?: string;
 }>();
+
+const imgError = ref(false);
+const retriedSrc = ref("");
+
+const fallbackLetter = computed(() => {
+  const t = props.title?.trim() || "";
+  if (t) return t.substring(0, 1).toUpperCase();
+  const icon = props.icon?.trim() || "";
+  if (!icon) return "";
+  const parts = icon.split("/");
+  const filename = parts[parts.length - 1] || "";
+  const name = filename.split(".")[0] || "";
+  const decoded = decodeURIComponent(name).replace(/[+_]/g, " ").trim();
+  if (decoded) return decoded.substring(0, 1).toUpperCase();
+  return "";
+});
+
+watch(
+  () => props.icon,
+  () => {
+    imgError.value = false;
+    retriedSrc.value = "";
+  },
+);
 
 const sizePx = computed(() => props.size ?? 48);
 const scaleVal = computed(() => (props.imgScale ?? 100) / 100);
@@ -51,6 +75,27 @@ const isSvg = computed(() => {
   const s = props.icon || "";
   return !!s && s.trim().startsWith("<svg");
 });
+
+const displaySrc = computed(() => {
+  if (retriedSrc.value) return retriedSrc.value;
+  return finalIcon.value;
+});
+
+const showFallback = computed(() => isImg.value && imgError.value && !!fallbackLetter.value);
+
+const onImageError = () => {
+  const current = retriedSrc.value || finalIcon.value;
+  if (!current || retriedSrc.value) {
+    imgError.value = true;
+    return;
+  }
+  const separator = current.includes("?") ? "&" : "?";
+  retriedSrc.value = `${current}${separator}_retry=${Date.now()}`;
+};
+
+const onImageLoad = () => {
+  imgError.value = false;
+};
 
 const textScale = computed(() => ((props.size ?? 48) >= 48 ? 0.52 : 0.56) * scaleVal.value);
 
@@ -127,15 +172,28 @@ const pathD = computed(() => {
           :style="fillStyle"
         />
 
-        <image
+        <foreignObject
           v-if="isImg"
-          :href="finalIcon"
           :x="imgGeometry.x"
           :y="imgGeometry.y"
           :width="imgGeometry.width"
           :height="imgGeometry.height"
-          preserveAspectRatio="xMidYMid slice"
-        />
+        >
+          <img
+            v-if="!showFallback"
+            :src="displaySrc"
+            style="width:100%;height:100%;object-fit:contain;display:block"
+            @error="onImageError"
+            @load="onImageLoad"
+          />
+          <div
+            v-else
+            style="width:100%;height:100%;display:flex;align-items:center;justify-content:center;color:#374151;font-family:system-ui, sans-serif;font-weight:600"
+            :style="{ fontSize: (sizePx * textScale) + 'px' }"
+          >
+            {{ fallbackLetter }}
+          </div>
+        </foreignObject>
         <foreignObject v-else-if="isSvg" x="0" y="0" width="100" height="100">
           <div
             v-html="finalIcon"
