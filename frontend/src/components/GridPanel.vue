@@ -3374,7 +3374,6 @@ onUnmounted(() => {
                       : 'bg-white'
                   "
                   :icon="processIcon(widget.data.icon)"
-                  :title="widget.data.title"
                   class="w-full h-full"
                   :class="widget.data.backgroundImage ? 'drop-shadow-lg' : ''"
                 />
@@ -3821,7 +3820,6 @@ onUnmounted(() => {
                           : 'bg-white'
                       "
                       :icon="processIcon(item.icon || '')"
-                      :title="item.title"
                       class="transition-all duration-300 relative z-10 w-full h-full"
                       :class="item.backgroundImage || group.backgroundImage ? 'drop-shadow-lg' : ''"
                     />
