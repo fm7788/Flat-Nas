@@ -8,7 +8,7 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
-// handleMemoUpdate 处理备忘录更新：收到前端更新后广播给所有客户端
+// handleMemoUpdate 处理备忘录更新：收到前端更新后仅广播给同一用户的客户端
 func handleMemoUpdate(client *Client, manager *WSManager, rawPayload json.RawMessage) {
 	var p MemoUpdatePayload
 	if err := json.Unmarshal(rawPayload, &p); err != nil {
@@ -18,15 +18,15 @@ func handleMemoUpdate(client *Client, manager *WSManager, rawPayload json.RawMes
 		return
 	}
 
-	// 鉴权已在连接握手阶段完成，此处直接广播
 	replyMsg, _ := json.Marshal(map[string]interface{}{
 		"type": "memo_updated",
 		"payload": map[string]interface{}{
 			"widgetId": p.WidgetID,
 			"content":  p.Content,
+			"username": client.username,
 		},
 	})
-	manager.Broadcast(replyMsg, "")
+	manager.BroadcastToUser(client.username, replyMsg, client.sessionID)
 }
 
 // handleTodoUpdate 处理待办更新
@@ -44,9 +44,10 @@ func handleTodoUpdate(client *Client, manager *WSManager, rawPayload json.RawMes
 		"payload": map[string]interface{}{
 			"widgetId": p.WidgetID,
 			"content":  p.Content,
+			"username": client.username,
 		},
 	})
-	manager.Broadcast(replyMsg, "")
+	manager.BroadcastToUser(client.username, replyMsg, client.sessionID)
 }
 
 // handleNetworkMode 处理网络模式切换
@@ -90,7 +91,7 @@ func isValidNetworkMode(mode string) bool {
 }
 
 // BroadcastMemoUpdated REST API 保存 memo 后通过 WebSocket 广播
-func BroadcastMemoUpdated(manager *WSManager, widgetID string, content interface{}) {
+func BroadcastMemoUpdated(manager *WSManager, username string, widgetID string, content interface{}) {
 	if manager == nil {
 		return
 	}
@@ -99,9 +100,10 @@ func BroadcastMemoUpdated(manager *WSManager, widgetID string, content interface
 		"payload": map[string]interface{}{
 			"widgetId": widgetID,
 			"content":  content,
+			"username": username,
 		},
 	})
-	manager.Broadcast(replyMsg, "")
+	manager.BroadcastToUser(username, replyMsg, "")
 }
 
 // BroadcastDataUpdated REST API 保存数据后通过 WebSocket 广播
@@ -116,7 +118,7 @@ func BroadcastDataUpdated(manager *WSManager, username string, version int64) {
 			"version":  version,
 		},
 	})
-	manager.Broadcast(replyMsg, "")
+	manager.BroadcastToUser(username, replyMsg, "")
 }
 
 // WSBroadcaster 辅助结构体，让 handlers 能方便调用广播
@@ -124,24 +126,24 @@ type WSBroadcaster struct {
 	Manager *WSManager
 }
 
-func (b *WSBroadcaster) BroadcastMemo(widgetID string, content interface{}) {
-	BroadcastMemoUpdated(b.Manager, widgetID, content)
+func (b *WSBroadcaster) BroadcastMemo(username string, widgetID string, content interface{}) {
+	BroadcastMemoUpdated(b.Manager, username, widgetID, content)
 }
 
 func (b *WSBroadcaster) BroadcastData(username string, version int64) {
 	BroadcastDataUpdated(b.Manager, username, version)
 }
 
-func (b *WSBroadcaster) BroadcastTodo(widgetID string, content interface{}) {
-	BroadcastTodoUpdated(b.Manager, widgetID, content)
+func (b *WSBroadcaster) BroadcastTodo(username string, widgetID string, content interface{}) {
+	BroadcastTodoUpdated(b.Manager, username, widgetID, content)
 }
 
-func (b *WSBroadcaster) BroadcastBookmarks(widgetID string, content interface{}) {
-	BroadcastBookmarksUpdated(b.Manager, widgetID, content)
+func (b *WSBroadcaster) BroadcastBookmarks(username string, widgetID string, content interface{}) {
+	BroadcastBookmarksUpdated(b.Manager, username, widgetID, content)
 }
 
 // BroadcastTodoUpdated REST API 保存 todo 后通过 WebSocket 广播
-func BroadcastTodoUpdated(manager *WSManager, widgetID string, content interface{}) {
+func BroadcastTodoUpdated(manager *WSManager, username string, widgetID string, content interface{}) {
 	if manager == nil {
 		return
 	}
@@ -150,13 +152,14 @@ func BroadcastTodoUpdated(manager *WSManager, widgetID string, content interface
 		"payload": map[string]interface{}{
 			"widgetId": widgetID,
 			"content":  content,
+			"username": username,
 		},
 	})
-	manager.Broadcast(replyMsg, "")
+	manager.BroadcastToUser(username, replyMsg, "")
 }
 
 // BroadcastBookmarksUpdated REST API 保存 bookmarks 后通过 WebSocket 广播
-func BroadcastBookmarksUpdated(manager *WSManager, widgetID string, content interface{}) {
+func BroadcastBookmarksUpdated(manager *WSManager, username string, widgetID string, content interface{}) {
 	if manager == nil {
 		return
 	}
@@ -165,9 +168,10 @@ func BroadcastBookmarksUpdated(manager *WSManager, widgetID string, content inte
 		"payload": map[string]interface{}{
 			"widgetId": widgetID,
 			"content":  content,
+			"username": username,
 		},
 	})
-	manager.Broadcast(replyMsg, "")
+	manager.BroadcastToUser(username, replyMsg, "")
 }
 
 // globalBroadcaster 全局广播器（由 main.go 初始化）

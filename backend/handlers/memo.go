@@ -6,9 +6,61 @@ import (
 
 	"flatnasgo-backend/config"
 
-	socketio "github.com/googollee/go-socket.io"
 	"github.com/golang-jwt/jwt/v5"
+	socketio "github.com/googollee/go-socket.io"
 )
+
+const socketUserRoomPrefix = "user:"
+
+func SocketUserRoom(username string) string {
+	username = strings.TrimSpace(username)
+	if username == "" {
+		return ""
+	}
+	return socketUserRoomPrefix + username
+}
+
+func socketConnUsername(s socketio.Conn) string {
+	if s == nil {
+		return ""
+	}
+	if username, ok := s.Context().(string); ok {
+		return strings.TrimSpace(username)
+	}
+	return ""
+}
+
+func bindSocketUserRoom(s socketio.Conn, username string) bool {
+	room := SocketUserRoom(username)
+	if room == "" {
+		return false
+	}
+	if socketConnUsername(s) != username {
+		s.SetContext(username)
+	}
+	hasRoom := false
+	for _, existing := range s.Rooms() {
+		if existing == room {
+			hasRoom = true
+			break
+		}
+	}
+	if !hasRoom {
+		s.Join(room)
+	}
+	return true
+}
+
+func AuthorizeSocketConn(s socketio.Conn, token string) (string, bool) {
+	username, ok := validateSocketToken(token)
+	if !ok {
+		return "", false
+	}
+	if !bindSocketUserRoom(s, username) {
+		return "", false
+	}
+	return username, true
+}
 
 type MemoUpdatePayload struct {
 	Token    string      `json:"token"`
@@ -28,12 +80,14 @@ func BindMemoHandlers(server *socketio.Server) {
 		if !ok {
 			return
 		}
-		if _, ok := validateSocketToken(token); !ok {
+		username, ok := AuthorizeSocketConn(s, token)
+		if !ok {
 			return
 		}
-		server.BroadcastToNamespace("/", "memo:updated", map[string]interface{}{
+		server.BroadcastToRoom("/", SocketUserRoom(username), "memo:updated", map[string]interface{}{
 			"widgetId": widgetId,
 			"content":  content,
+			"username": username,
 		})
 	})
 }
@@ -44,12 +98,14 @@ func BindTodoHandlers(server *socketio.Server) {
 		if !ok {
 			return
 		}
-		if _, ok := validateSocketToken(token); !ok {
+		username, ok := AuthorizeSocketConn(s, token)
+		if !ok {
 			return
 		}
-		server.BroadcastToNamespace("/", "todo:updated", map[string]interface{}{
+		server.BroadcastToRoom("/", SocketUserRoom(username), "todo:updated", map[string]interface{}{
 			"widgetId": widgetId,
 			"content":  content,
+			"username": username,
 		})
 	})
 }
@@ -69,14 +125,14 @@ func BindNetworkHandlers(server *socketio.Server) {
 		if !ok {
 			return
 		}
-		username, ok := validateSocketToken(token)
+		username, ok := AuthorizeSocketConn(s, token)
 		if !ok {
 			return
 		}
 		if !isValidNetworkMode(mode) {
 			return
 		}
-		server.BroadcastToNamespace("/", "network:mode", map[string]interface{}{
+		server.BroadcastToRoom("/", SocketUserRoom(username), "network:mode", map[string]interface{}{
 			"mode":     mode,
 			"username": username,
 		})
@@ -86,7 +142,7 @@ func BindNetworkHandlers(server *socketio.Server) {
 		if !ok {
 			return
 		}
-		if _, ok := validateSocketToken(token); !ok {
+		if _, ok := AuthorizeSocketConn(s, token); !ok {
 			return
 		}
 		s.Emit("network:heartbeat", map[string]interface{}{

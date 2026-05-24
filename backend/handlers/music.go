@@ -11,6 +11,11 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
+func isSupportedMusicFile(name string) bool {
+	ext := strings.ToLower(filepath.Ext(name))
+	return ext == ".mp3" || ext == ".flac" || ext == ".wav" || ext == ".m4a" || ext == ".ogg"
+}
+
 // UploadMusic handles music file uploads
 func UploadMusic(c *gin.Context) {
 	form, err := c.MultipartForm()
@@ -22,13 +27,25 @@ func UploadMusic(c *gin.Context) {
 	files := form.File["files"]
 	var count int
 	var errors []string
+	username := c.GetString("username")
+	if username == "" {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "Unauthorized"})
+		return
+	}
+
+	assetMetaMu.Lock()
+	store, metaErr := loadAssetMetaStoreUnlocked()
+	if metaErr != nil {
+		assetMetaMu.Unlock()
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to load metadata"})
+		return
+	}
 
 	for _, file := range files {
 		filename := filepath.Base(file.Filename)
-		ext := strings.ToLower(filepath.Ext(filename))
 
 		// Simple validation
-		if ext != ".mp3" && ext != ".flac" && ext != ".wav" && ext != ".m4a" && ext != ".ogg" {
+		if !isSupportedMusicFile(filename) {
 			errors = append(errors, fmt.Sprintf("%s: unsupported format", filename))
 			continue
 		}
@@ -37,8 +54,22 @@ func UploadMusic(c *gin.Context) {
 			errors = append(errors, fmt.Sprintf("%s: %v", filename, err))
 			continue
 		}
+		owner := username
+		store.Music[normalizeAssetKey(filename)] = assetMetaEntry{Owner: &owner}
 		count++
 	}
+
+	if count > 0 {
+		if err := saveAssetMetaStoreUnlocked(store); err != nil {
+			assetMetaMu.Unlock()
+			c.JSON(http.StatusInternalServerError, gin.H{
+				"success": false,
+				"error":   "Failed to save metadata",
+			})
+			return
+		}
+	}
+	assetMetaMu.Unlock()
 
 	if count == 0 && len(errors) > 0 {
 		c.JSON(http.StatusInternalServerError, gin.H{
@@ -71,8 +102,14 @@ func DeleteMusic(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Path is required"})
 		return
 	}
+	username := c.GetString("username")
+	if username == "" {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "Unauthorized"})
+		return
+	}
 
-	musicPath := filepath.Join(config.MusicDir, req.Path)
+	normalizedPath := normalizeAssetKey(req.Path)
+	musicPath := filepath.Join(config.MusicDir, normalizedPath)
 
 	absPath, err := filepath.Abs(musicPath)
 	if err != nil {
@@ -92,10 +129,39 @@ func DeleteMusic(c *gin.Context) {
 		return
 	}
 
+	assetMetaMu.Lock()
+	store, metaErr := loadAssetMetaStoreUnlocked()
+	if metaErr != nil {
+		assetMetaMu.Unlock()
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to load metadata"})
+		return
+	}
+	if store.Music == nil {
+		store.Music = map[string]assetMetaEntry{}
+	}
+	if _, ok := store.Music[normalizedPath]; !ok && isSupportedMusicFile(normalizedPath) {
+		store.Music[normalizedPath] = assetMetaEntry{Owner: nil}
+	}
+	entry := store.Music[normalizedPath]
+	if username != "admin" {
+		if entry.Owner == nil || strings.TrimSpace(*entry.Owner) == "" || strings.TrimSpace(*entry.Owner) != username {
+			assetMetaMu.Unlock()
+			c.JSON(http.StatusForbidden, gin.H{"error": "Permission denied"})
+			return
+		}
+	}
 	if err := os.Remove(absPath); err != nil {
+		assetMetaMu.Unlock()
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to delete file"})
 		return
 	}
+	delete(store.Music, normalizedPath)
+	if err := saveAssetMetaStoreUnlocked(store); err != nil {
+		assetMetaMu.Unlock()
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to save metadata"})
+		return
+	}
+	assetMetaMu.Unlock()
 
 	c.JSON(http.StatusOK, gin.H{"success": true})
 }

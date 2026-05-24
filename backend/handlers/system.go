@@ -10,7 +10,6 @@ import (
 	stdnet "net"
 	"net/http"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"regexp"
 	"runtime"
@@ -459,43 +458,150 @@ func fetchIPFromProvider(provider string) (*IPInfo, error) {
 
 var ipProviders = []string{"ip-api", "ipwhois", "ipapi-co", "freeipapi"}
 
+// englishToChineseCity 常见城市英文名→中文映射表（兜底转换）
+var englishToChineseCity = map[string]string{
+	// 浙江省
+	"Ningbo":   "宁波",
+	"Hangzhou": "杭州",
+	"Wenzhou":  "温州",
+	"Jiaxing":  "嘉兴",
+	"Huzhou":   "湖州",
+	"Shaoxing": "绍兴",
+	"Jinhua":   "金华",
+	"Quzhou":   "衢州",
+	"Taizhou":  "台州",
+	"Lishui":   "丽水",
+	"Zhoushan": "舟山",
+	// 直辖市
+	"Shanghai":  "上海",
+	"Beijing":   "北京",
+	"Tianjin":   "天津",
+	"Chongqing": "重庆",
+	// 广东省
+	"Guangzhou": "广州",
+	"Shenzhen":  "深圳",
+	"Dongguan":  "东莞",
+	"Foshan":    "佛山",
+	"Zhuhai":    "珠海",
+	"Shantou":   "汕头",
+	"Zhongshan": "中山",
+	"Huizhou":   "惠州",
+	"Jiangmen":  "江门",
+	"Zhanjiang": "湛江",
+	// 江苏省
+	"Nanjing":     "南京",
+	"Suzhou":      "苏州",
+	"Wuxi":        "无锡",
+	"Changzhou":   "常州",
+	"Nantong":     "南通",
+	"Yangzhou":    "扬州",
+	"Xuzhou":      "徐州",
+	"Yancheng":    "盐城",
+	"Lianyungang": "连云港",
+	// 其他主要城市
+	"Chengdu":      "成都",
+	"Wuhan":        "武汉",
+	"Xi'an":        "西安",
+	"Xian":         "西安",
+	"Qingdao":      "青岛",
+	"Dalian":       "大连",
+	"Shenyang":     "沈阳",
+	"Harbin":       "哈尔滨",
+	"Changsha":     "长沙",
+	"Zhengzhou":    "郑州",
+	"Jinan":        "济南",
+	"Hefei":        "合肥",
+	"Fuzhou":       "福州",
+	"Xiamen":       "厦门",
+	"Kunming":      "昆明",
+	"Nanning":      "南宁",
+	"Guiyang":      "贵阳",
+	"Urumqi":       "乌鲁木齐",
+	"Lhasa":        "拉萨",
+	"Hohhot":       "呼和浩特",
+	"Yinchuan":     "银川",
+	"Lanzhou":      "兰州",
+	"Taiyuan":      "太原",
+	"Shijiazhuang": "石家庄",
+	"Haikou":       "海口",
+	"Sanya":        "三亚",
+}
+
+// normalizeCityToChinese 将英文城市名转换为中文（如果存在映射）
+func normalizeCityToChinese(city string) string {
+	if city == "" {
+		return ""
+	}
+	// 先检查是否已经在映射表中
+	if zh, ok := englishToChineseCity[city]; ok {
+		return zh
+	}
+	// 检查是否是常见的 "City, Province" 格式
+	parts := strings.SplitN(city, ", ", 2)
+	if len(parts) == 2 {
+		if zh, ok := englishToChineseCity[parts[0]]; ok {
+			return zh
+		}
+	}
+	return city
+}
+
 func fetchIPAndCache() bool {
 	if !atomic.CompareAndSwapInt32(&isFetchingIP, 0, 1) {
 		return false
 	}
 	defer atomic.StoreInt32(&isFetchingIP, 0)
 
-	for _, provider := range ipProviders {
+	// 优先尝试 ip-api（支持中文），失败后重试 2 次
+	for attempt := 0; attempt < 3; attempt++ {
+		info, err := fetchIPFromProvider("ip-api")
+		if err == nil && info.City != "" {
+			info.City = normalizeCityToChinese(info.City)
+			saveIPInfoToCache(info, "ip-api")
+			return true
+		}
+		if attempt < 2 {
+			time.Sleep(500 * time.Millisecond)
+		}
+	}
+
+	// ip-api 完全失败后，才尝试其他备用提供商
+	for _, provider := range ipProviders[1:] {
 		info, err := fetchIPFromProvider(provider)
 		if err != nil {
 			log.Printf("[IPFetcher] %s failed: %v", provider, err)
 			continue
 		}
 		if info.City != "" {
-			location := info.City
-			if info.Region != "" {
-				location = info.Region + " " + location
-			}
-			if info.Country != "" {
-				location = info.Country + " " + location
-			}
-			if info.Isp != "" {
-				location = location + " " + info.Isp
-			}
-			globalIPCache.Mutex.Lock()
-			globalIPCache.IP = info.IP
-			globalIPCache.City = info.City
-			globalIPCache.Region = info.Region
-			globalIPCache.Country = info.Country
-			globalIPCache.Location = location
-			globalIPCache.Updated = time.Now()
-			globalIPCache.Mutex.Unlock()
-			log.Printf("[IPFetcher] Success via %s: %s", provider, info.City)
+			info.City = normalizeCityToChinese(info.City)
+			saveIPInfoToCache(info, provider)
 			return true
 		}
 	}
 	log.Println("[IPFetcher] All providers failed")
 	return false
+}
+
+func saveIPInfoToCache(info *IPInfo, provider string) {
+	location := info.City
+	if info.Region != "" {
+		location = info.Region + " " + location
+	}
+	if info.Country != "" {
+		location = info.Country + " " + location
+	}
+	if info.Isp != "" {
+		location = location + " " + info.Isp
+	}
+	globalIPCache.Mutex.Lock()
+	globalIPCache.IP = info.IP
+	globalIPCache.City = info.City
+	globalIPCache.Region = info.Region
+	globalIPCache.Country = info.Country
+	globalIPCache.Location = location
+	globalIPCache.Updated = time.Now()
+	globalIPCache.Mutex.Unlock()
+	log.Printf("[IPFetcher] Success via %s: %s", provider, info.City)
 }
 
 func GetIP(c *gin.Context) {
@@ -642,28 +748,82 @@ func getLocationString(data map[string]interface{}) string {
 	return strings.Join(parts, " ")
 }
 
-// Ping handles latency check
+var pingHostnameRe = regexp.MustCompile(`^[a-zA-Z0-9]([a-zA-Z0-9\-]{0,61}[a-zA-Z0-9])?(\.[a-zA-Z0-9]([a-zA-Z0-9\-]{0,61}[a-zA-Z0-9])?)*$`)
+
+// validatePingTarget 对 target 做严格校验，防止命令注入 / SSRF 异常输入。
+// 允许 IPv4 / IPv6 / 合法主机名；最长 253 字符。
+func validatePingTarget(target string) (string, bool) {
+	target = strings.TrimSpace(target)
+	if target == "" || len(target) > 253 {
+		return "", false
+	}
+	// 优先尝试解析 IP（同时兼容 IPv6 [::1] 写法）
+	if ip := stdnet.ParseIP(strings.Trim(target, "[]")); ip != nil {
+		return ip.String(), true
+	}
+	// 主机名校验：仅允许字母/数字/连字符/点
+	if pingHostnameRe.MatchString(target) {
+		return target, true
+	}
+	return "", false
+}
+
+// pingTCPProbe 通过 TCP 探测目标常见端口（80/443/22/53），
+// 任一端口握手成功即视为存活。纯 Go 实现，杜绝命令注入。
+// 对内网设备友好（绝大多数 NAS/路由/服务都至少开放其中一个端口）。
+func pingTCPProbe(target string, timeout time.Duration) (time.Duration, bool) {
+	ports := []string{"80", "443", "22", "53"}
+	type result struct {
+		rtt time.Duration
+		ok  bool
+	}
+	resultCh := make(chan result, len(ports))
+	for _, p := range ports {
+		go func(port string) {
+			start := time.Now()
+			addr := stdnet.JoinHostPort(target, port)
+			conn, err := stdnet.DialTimeout("tcp", addr, timeout)
+			if err != nil {
+				resultCh <- result{0, false}
+				return
+			}
+			_ = conn.Close()
+			resultCh <- result{time.Since(start), true}
+		}(p)
+	}
+	var firstRTT time.Duration
+	got := false
+	for i := 0; i < len(ports); i++ {
+		r := <-resultCh
+		if r.ok && !got {
+			firstRTT = r.rtt
+			got = true
+		}
+	}
+	return firstRTT, got
+}
+
+// Ping handles latency check.
+// 安全加固：
+//  1. 严格校验 target，仅接受合法 IP 或主机名（防命令注入）。
+//  2. 使用纯 Go net.DialTimeout 实现 TCP 连通探测，不再调用系统 ping 命令。
+//  3. 配合路由层 OptionalAuth + 限流中间件防 SSRF 扫描。
 func Ping(c *gin.Context) {
-	target := c.Query("target")
-	if target == "" {
-		target = "223.5.5.5"
+	raw := c.Query("target")
+	if raw == "" {
+		raw = "223.5.5.5"
+	}
+	target, ok := validatePingTarget(raw)
+	if !ok {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"success": false,
+			"error":   "Invalid target",
+		})
+		return
 	}
 
-	// Ping implementation based on OS
-	var cmd *exec.Cmd
-	if runtime.GOOS == "windows" {
-		// -n 1: count 1
-		// -w 1000: timeout 1000ms
-		cmd = exec.Command("ping", "-n", "1", "-w", "1000", target)
-	} else {
-		// Linux/Unix
-		// -c 1: count 1
-		// -W 1: timeout 1 second
-		cmd = exec.Command("ping", "-c", "1", "-W", "1", target)
-	}
-	output, err := cmd.CombinedOutput()
-
-	if err != nil {
+	rtt, alive := pingTCPProbe(target, time.Second)
+	if !alive {
 		c.JSON(http.StatusOK, gin.H{
 			"success": false,
 			"error":   "Ping failed",
@@ -671,57 +831,54 @@ func Ping(c *gin.Context) {
 		return
 	}
 
-	outStr := string(output)
-	// Look for time=XXms
-	// Windows output: "Reply from ... time=12ms ..."
-	// Linux output: "... time=12.3 ms"
-	// Chinese output: "来自 ... 时间=12ms ..."
-	// Regex to capture digits and optional decimals, allowing optional space before ms
-	// Modified to be more permissive for Windows GBK output (ignoring the "time" label which might be garbled)
-	re := regexp.MustCompile(`[=<]([\d\.]+) ?ms`)
-	matches := re.FindStringSubmatch(outStr)
-
-	if len(matches) > 1 {
+	ms := rtt.Milliseconds()
+	if ms <= 0 {
 		c.JSON(http.StatusOK, gin.H{
 			"success": true,
-			"latency": matches[1] + "ms",
+			"latency": "<1ms",
 		})
-	} else {
-		// Try to handle "0ms" or "<1ms"
-		if strings.Contains(outStr, "<1ms") {
-			c.JSON(http.StatusOK, gin.H{
-				"success": true,
-				"latency": "<1ms",
-			})
-			return
-		}
-		c.JSON(http.StatusOK, gin.H{
-			"success": false,
-			"error":   "Could not parse latency",
-		})
+		return
 	}
+	c.JSON(http.StatusOK, gin.H{
+		"success": true,
+		"latency": fmt.Sprintf("%dms", ms),
+	})
 }
 
 // GetMusicList returns list of music files
 func GetMusicList(c *gin.Context) {
+	username := c.GetString("username")
 	var files []string
+	assetMetaMu.Lock()
+	store, metaErr := loadAssetMetaStoreUnlocked()
+	if metaErr != nil {
+		assetMetaMu.Unlock()
+		c.JSON(http.StatusInternalServerError, []string{})
+		return
+	}
 	err := filepath.Walk(config.MusicDir, func(path string, info os.FileInfo, err error) error {
 		if err != nil {
 			return err
 		}
 		if !info.IsDir() {
-			ext := strings.ToLower(filepath.Ext(path))
-			if ext == ".mp3" || ext == ".flac" || ext == ".wav" || ext == ".m4a" || ext == ".ogg" {
+			if isSupportedMusicFile(path) {
 				rel, _ := filepath.Rel(config.MusicDir, path)
 				// Convert windows path separator to forward slash for web url
-				rel = strings.ReplaceAll(rel, "\\", "/")
-				files = append(files, rel)
+				rel = normalizeAssetKey(rel)
+				if _, ok := store.Music[rel]; !ok {
+					store.Music[rel] = assetMetaEntry{Owner: nil}
+				}
+				if canAccessOwnedAsset(store.Music[rel].Owner, username) {
+					files = append(files, rel)
+				}
 			}
 		}
 		return nil
 	})
+	saveErr := saveAssetMetaStoreUnlocked(store)
+	assetMetaMu.Unlock()
 
-	if err != nil {
+	if err != nil || saveErr != nil {
 		c.JSON(http.StatusInternalServerError, []string{})
 		return
 	}

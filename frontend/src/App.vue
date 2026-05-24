@@ -4,7 +4,7 @@ import GridPanel from "./components/GridPanel.vue";
 import StatusMonitor from "./components/StatusMonitor.vue";
 import NetworkIndicator from "./components/NetworkIndicator.vue";
 import { useMainStore } from "./stores/main";
-import type { CustomScript, MarketplaceItem } from "@/types";
+import type { CustomScript } from "@/types";
 import { useWindowScroll, useWindowSize } from "@vueuse/core";
 
 const store = useMainStore();
@@ -384,42 +384,6 @@ watch(
 );
 
 onMounted(() => {
-  // Listen for marketplace install events from new windows/tabs (Component Store)
-  window.addEventListener("message", async (event: MessageEvent) => {
-    // Validate message structure
-    const { type, payload } = event.data || {};
-    if (type !== "INSTALL_COMPONENT" || !payload) return;
-
-    // Optional: Validate origin if needed. For now we trust the user's browser context.
-    // If strict security is needed, we should check against store.appConfig.marketplaceListUrl
-
-    const item = payload as MarketplaceItem;
-    
-    // JS Disclaimer
-    if (item.js && !store.appConfig.customJsDisclaimerAgreed) {
-      const ok = confirm(
-        `安全提示\n\n组件 "${item.name}" 包含自定义 JavaScript 脚本。\n自定义脚本具有较高权限，可能存在安全风险。\n\n请确认您信任该组件来源，是否继续安装？`
-      );
-      if (!ok) return;
-      store.appConfig.customJsDisclaimerAgreed = true;
-    }
-
-    try {
-      store.applyMarketplaceItem(item);
-      
-      // Notify source window
-      if (event.source) {
-        (event.source as Window).postMessage({ type: "INSTALL_SUCCESS", id: item.id }, event.origin);
-      }
-      
-      // Notify user in main window
-      alert(`组件 "${item.name}" 安装成功！`);
-    } catch (e) {
-      console.error(e);
-      alert(`组件 "${item.name}" 安装失败: ${e instanceof Error ? e.message : String(e)}`);
-    }
-  });
-
   store.initGlobalDrag();
   const win = window as Window & { __flatnasSaveFetchWrapped?: boolean };
   if (!win.__flatnasSaveFetchWrapped) {

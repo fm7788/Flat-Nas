@@ -16,9 +16,6 @@ const CACHE_WRITE_GUARD_MS = 15000;
 const SERVER_SNAPSHOT_RETRY_COUNT = 3;
 const SERVER_SNAPSHOT_RETRY_DELAY_MS = 1000;
 const SERVER_SNAPSHOT_TIMEOUT_MS = 60000;
-const DEFAULT_MARKETPLACE_LIST_URL = "http://qdnas.icu:23111/";
-const DEV_MARKETPLACE_LIST_URL = "http://localhost:5174/";
-const LEGACY_DEFAULT_MARKETPLACE_LIST_URL = "https://qdnas.icu:23111/";
 
 export const useCacheStore = defineStore("cache", () => {
   const auth = useAuthStore();
@@ -104,13 +101,6 @@ export const useCacheStore = defineStore("cache", () => {
         delete mergedConfig.fixedWallpaper;
         delete mergedConfig.forceNetworkMode;
         configStore.appConfig = mergedConfig;
-      }
-      if (
-        !configStore.appConfig.marketplaceListUrl ||
-        configStore.appConfig.marketplaceListUrl === DEV_MARKETPLACE_LIST_URL ||
-        configStore.appConfig.marketplaceListUrl === LEGACY_DEFAULT_MARKETPLACE_LIST_URL
-      ) {
-        configStore.appConfig.marketplaceListUrl = DEFAULT_MARKETPLACE_LIST_URL;
       }
       if (Array.isArray(cache.rssFeeds)) rssFeedsRef.value = cache.rssFeeds;
       if (Array.isArray(cache.rssCategories)) rssCategoriesRef.value = cache.rssCategories;
@@ -204,8 +194,5 @@ export const useCacheStore = defineStore("cache", () => {
     loadServerSnapshot,
     fetchWithTimeout,
     getHeaders,
-    DEFAULT_MARKETPLACE_LIST_URL,
-    DEV_MARKETPLACE_LIST_URL,
-    LEGACY_DEFAULT_MARKETPLACE_LIST_URL,
   };
 });

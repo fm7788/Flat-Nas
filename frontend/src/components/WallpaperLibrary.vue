@@ -112,8 +112,23 @@ const setWallpaper = (name: string, type: "pc" | "mobile") => {
   const url = getWallpaperPath(name, type);
   if (type === "pc") {
     store.appConfig.background = url;
+    // 手动选择本地壁纸时，关闭 API 自动更新调度器（避免覆盖用户选择）
+    if (store.appConfig.wallpaperConfig?.enabled) {
+      store.appConfig.wallpaperConfig = {
+        ...store.appConfig.wallpaperConfig,
+        enabled: false,
+      };
+      store.markDirty();
+    }
   } else {
     store.appConfig.mobileBackground = url;
+    if (store.appConfig.mobileWallpaperConfig?.enabled) {
+      store.appConfig.mobileWallpaperConfig = {
+        ...store.appConfig.mobileWallpaperConfig,
+        enabled: false,
+      };
+      store.markDirty();
+    }
   }
   return true;
 };
@@ -321,8 +336,25 @@ const executeDelete = async (name: string, type: "pc" | "mobile") => {
   if (url === currentBg) {
     // Reset to default
     const defaultUrl = getWallpaperPath(DEFAULT_WALLPAPER, type);
-    if (type === "pc") store.appConfig.background = defaultUrl;
-    else store.appConfig.mobileBackground = defaultUrl;
+    if (type === "pc") {
+      store.appConfig.background = defaultUrl;
+      // 删除当前壁纸并回退到默认时，同时停用 API 自动更新避免立即被覆盖
+      if (store.appConfig.wallpaperConfig?.enabled) {
+        store.appConfig.wallpaperConfig = {
+          ...store.appConfig.wallpaperConfig,
+          enabled: false,
+        };
+      }
+    } else {
+      store.appConfig.mobileBackground = defaultUrl;
+      if (store.appConfig.mobileWallpaperConfig?.enabled) {
+        store.appConfig.mobileWallpaperConfig = {
+          ...store.appConfig.mobileWallpaperConfig,
+          enabled: false,
+        };
+      }
+    }
+    store.markDirty();
   }
 
   const base =
@@ -728,6 +760,18 @@ const applyCustomApi = async (type: "pc" | "mobile", apply: boolean = true) => {
       } else { 
         store.appConfig.mobileBackground = backgroundPath;
         store.appConfig.mobileWallpaperConfig = config;
+      }
+      // 记录 API 自动设置的路径，使 useWallpaperRotation 能识别用户后续是否手动切换
+      if (enableScheduler && backgroundPath) {
+        try {
+          const key =
+            type === "pc"
+              ? "flatnas_wallpaper_last_api_path_pc"
+              : "flatnas_wallpaper_last_api_path_mobile";
+          localStorage.setItem(key, backgroundPath);
+        } catch {
+          // ignore
+        }
       }
       if (uploadedFilename) {
         prependWallpaperToList(uploadedFilename, type);

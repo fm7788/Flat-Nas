@@ -12,7 +12,6 @@ import SystemStatusWidget from "./SystemStatusWidget.vue";
 import RssSettings from "./RssSettings.vue";
 import SearchSettings from "./SearchSettings.vue";
 import ScriptManager from "./ScriptManager.vue";
-import MarketplaceModal from "./MarketplaceModal.vue";
 import OverlayMotion from "@/components/base/OverlayMotion.vue";
 import { DEFAULT_NETWORK_RULES, NETWORK_PRESET_RULES } from "@/utils/network";
 import { createDefaultWidgetList } from "@/utils/widgetUtils";
@@ -592,21 +591,6 @@ const testWeatherConnection = async (sourceOverride?: string) => {
   } finally {
     isTestingWeather.value = false;
   }
-};
-
-const showMarketplace = ref(false);
-const openMarketplace = () => {
-  showMarketplace.value = true;
-};
-
-const setDevMarketplaceUrl = () => {
-  store.appConfig.marketplaceListUrl = "http://localhost:5174/";
-  store.markDirty();
-};
-
-const openMarketplaceInNewWindow = () => {
-  const url = (store.appConfig.marketplaceListUrl || "http://qdnas.icu:23111/").trim();
-  window.open(url, "_blank", "noopener,noreferrer");
 };
 
 const passwordInput = ref("");
@@ -5011,7 +4995,6 @@ document.querySelector('.card-item').addEventListener('click', () => {
     </div>
   </OverlayMotion>
 
-  <MarketplaceModal :show="showMarketplace" @update:show="showMarketplace = $event" />
 </template>
 
 <style scoped>

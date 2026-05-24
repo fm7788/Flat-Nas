@@ -822,13 +822,14 @@ func SaveMemo(c *gin.Context) {
 	}
 
 	if socketServer != nil {
-		socketServer.BroadcastToNamespace("/", "memo:updated", map[string]interface{}{
+		socketServer.BroadcastToRoom("/", SocketUserRoom(username), "memo:updated", map[string]interface{}{
 			"widgetId": widgetID,
 			"content":  next,
+			"username": username,
 		})
 	}
 	if b := ws.GetBroadcaster(); b != nil {
-		ws.BroadcastMemoUpdated(b.Manager, widgetID, next)
+		ws.BroadcastMemoUpdated(b.Manager, username, widgetID, next)
 	}
 
 	body := gin.H{"success": true, "data": next}
@@ -943,7 +944,7 @@ func SaveData(c *gin.Context) {
 	}
 
 	if socketServer != nil {
-		socketServer.BroadcastToNamespace("/", "data-updated", map[string]interface{}{
+		socketServer.BroadcastToRoom("/", SocketUserRoom(username), "data-updated", map[string]interface{}{
 			"username": username,
 			"version":  newVersion,
 		})
@@ -1071,6 +1072,7 @@ func UpdateSystemConfig(c *gin.Context) {
 	}
 
 	sysConfig := getCachedSystemConfig()
+	oldAuthMode := sysConfig.AuthMode
 
 	if v, ok := payload["authMode"].(string); ok {
 		if v != "single" && v != "multi" {
@@ -1087,6 +1089,12 @@ func UpdateSystemConfig(c *gin.Context) {
 		sysConfig.DockerHost = v
 	}
 
+	if sysConfig.AuthMode != oldAuthMode {
+		if err := migrateAuthModeData(oldAuthMode, sysConfig.AuthMode); err != nil {
+			log.Printf("UpdateSystemConfig: data migration failed: %v", err)
+		}
+	}
+
 	if err := utils.WriteJSON(config.SystemConfigFile, sysConfig); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update system config"})
 		return
@@ -1095,6 +1103,38 @@ func UpdateSystemConfig(c *gin.Context) {
 	InitDocker()
 
 	c.JSON(http.StatusOK, sysConfig)
+}
+
+func migrateAuthModeData(from, to string) error {
+	dataFile := filepath.Join(config.DataDir, "data.json")
+	adminUserFile := filepath.Join(config.UsersDir, "admin.json")
+
+	if from == "single" && to == "multi" {
+		if _, err := os.Stat(dataFile); err != nil {
+			return nil
+		}
+		if _, err := os.Stat(adminUserFile); err == nil {
+			return nil
+		}
+		src, err := os.ReadFile(dataFile)
+		if err != nil {
+			return err
+		}
+		return os.WriteFile(adminUserFile, src, 0644)
+	}
+
+	if from == "multi" && to == "single" {
+		if _, err := os.Stat(adminUserFile); err != nil {
+			return nil
+		}
+		src, err := os.ReadFile(adminUserFile)
+		if err != nil {
+			return err
+		}
+		return os.WriteFile(dataFile, src, 0644)
+	}
+
+	return nil
 }
 
 func StartDataWarmup() {

@@ -277,13 +277,6 @@ export const useSyncStore = defineStore("sync", () => {
       delete (mergedConfig as Record<string, unknown>).forceNetworkMode;
       configStore.appConfig = mergedConfig as typeof configStore.appConfig;
     }
-    if (
-      !configStore.appConfig.marketplaceListUrl ||
-      configStore.appConfig.marketplaceListUrl === cacheStore.DEV_MARKETPLACE_LIST_URL ||
-      configStore.appConfig.marketplaceListUrl === cacheStore.LEGACY_DEFAULT_MARKETPLACE_LIST_URL
-    ) {
-      configStore.appConfig.marketplaceListUrl = cacheStore.DEFAULT_MARKETPLACE_LIST_URL;
-    }
     // Migrations
     const ac = configStore.appConfig;
     if (ac.customCss && !ac.customCssList?.length) ac.customCssList = [{ id: "default-css", name: "默认自定义 CSS", content: ac.customCss, enable: true }];
@@ -416,6 +409,7 @@ export const useSyncStore = defineStore("sync", () => {
       case "auth_success": break;
       case "memo_updated": case "todo_updated": case "bookmarks_updated": {
         const p = msg.payload || {};
+        if (p.username !== auth.username) return;
         if (p.widgetId) {
           const w = widgetsStore.widgets.find((x) => x.id === p.widgetId);
           if (w) {

@@ -186,18 +186,6 @@ export interface AppConfig {
   mouseHoverEffect?: "scale" | "lift" | "glow" | "none" | string;
   autoUltrawide?: boolean;
   hideHeaderOnMobile?: boolean;
-  marketplaceListUrl?: string;
-}
-
-export interface MarketplaceItem {
-  id: string;
-  name: string;
-  description?: string;
-  type: "css" | "js" | "component" | "css+js" | "js+component" | "css+component" | "css+js+component";
-  css?: string;
-  js?: string;
-  component?: { title: string; html: string; css: string };
-  useProxy?: boolean;
 }
 
 export interface SystemConfig {

@@ -7,7 +7,7 @@ import {
   buildServerLayoutSignature,
 } from "@/utils/storeHelpers";
 import { normalizeIncomingWidgets as normalizeIncomingWidgetsUtil } from "@/utils/widgetUtils";
-import type { WidgetConfig, MarketplaceItem } from "@/types";
+import type { WidgetConfig } from "@/types";
 
 export const useWidgetsStore = defineStore("widgets", () => {
   const widgets = ref<WidgetConfig[]>([]);
@@ -259,52 +259,6 @@ export const useWidgetsStore = defineStore("widgets", () => {
     await saveData(true, true);
   };
 
-  const applyMarketplaceItem = (item: MarketplaceItem, appConfig: Record<string, unknown>) => {
-    let changed = false;
-
-    if (item.css) {
-      if (!appConfig.customCssList) appConfig.customCssList = [];
-      const newId = item.id ? `css-${item.id}` : `css-${Date.now()}`;
-      (appConfig.customCssList as unknown[]).push({
-        id: newId,
-        name: item.name || "Unknown CSS",
-        content: item.css,
-        enable: true,
-        useProxy: item.useProxy ?? false,
-      });
-      changed = true;
-    }
-
-    if (item.js) {
-      if (!appConfig.customJsList) appConfig.customJsList = [];
-      const newId = item.id ? `js-${item.id}` : `js-${Date.now()}`;
-      (appConfig.customJsList as unknown[]).push({
-        id: newId,
-        name: item.name || "Unknown JS",
-        content: item.js,
-        enable: true,
-        useProxy: item.useProxy ?? false,
-      });
-      changed = true;
-    }
-
-    if (item.component) {
-      const newId = "custom-css-" + Date.now();
-      widgets.value.push({
-        id: newId,
-        type: "custom-css",
-        enable: true,
-        data: item.component,
-        colSpan: 1,
-        rowSpan: 1,
-        isPublic: true,
-      });
-      changed = true;
-    }
-
-    return changed;
-  };
-
   return {
     widgets,
     mergedWidgets,
@@ -325,6 +279,5 @@ export const useWidgetsStore = defineStore("widgets", () => {
     undoLayout,
     stripWidgetUiState,
     applyWidgetUiState,
-    applyMarketplaceItem,
   };
 });

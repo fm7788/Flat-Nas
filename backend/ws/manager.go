@@ -102,6 +102,40 @@ func (m *WSManager) SendTo(sessionID string, message []byte) {
 	}(client)
 }
 
+// BroadcastToUser 向指定用户名的所有已授权客户端广播消息
+// 同一用户可能有多端连接（LAN/WAN/多标签页），全部接收以保证多端同步
+func (m *WSManager) BroadcastToUser(username string, message []byte, excludeSessionID string) {
+	if username == "" {
+		return
+	}
+	m.mu.RLock()
+	clients := make([]*Client, 0)
+	for id, c := range m.clients {
+		if id == excludeSessionID {
+			continue
+		}
+		if c.authorized && c.username == username {
+			clients = append(clients, c)
+		}
+	}
+	m.mu.RUnlock()
+
+	for _, c := range clients {
+		go func(client *Client) {
+			client.mu.Lock()
+			defer client.mu.Unlock()
+			if client.ctx.Err() != nil {
+				return
+			}
+			_ = client.conn.SetWriteDeadline(time.Now().Add(2 * time.Second))
+			err := client.conn.WriteMessage(websocket.TextMessage, message)
+			if err != nil {
+				go m.Unregister(client)
+			}
+		}(c)
+	}
+}
+
 // Count 返回当前连接数
 func (m *WSManager) Count() int {
 	m.mu.RLock()

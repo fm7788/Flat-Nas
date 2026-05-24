@@ -274,4 +274,12 @@ func ensureAdditionalDataFiles() {
 			log.Printf("Failed to create widget_cache.json: %v", err)
 		}
 	}
+
+	// Ensure asset_meta.json
+	assetMetaFile := filepath.Join(DataDir, "asset_meta.json")
+	if _, err := os.Stat(assetMetaFile); os.IsNotExist(err) {
+		if err := os.WriteFile(assetMetaFile, []byte("{\"music\":{},\"backgrounds\":{},\"mobileBackgrounds\":{}}"), 0644); err != nil {
+			log.Printf("Failed to create asset_meta.json: %v", err)
+		}
+	}
 }

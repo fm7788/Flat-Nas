@@ -107,31 +107,31 @@ export const useSaveStore = defineStore("save", () => {
           return 60000;
         };
 
-    const MAX_SAVE_RETRIES = 3;
-    const SAVE_TIMEOUT_MS = getSaveTimeout();
-    let saveAttempt = 0;
-    let res: Response | null = null;
+        const MAX_SAVE_RETRIES = 3;
+        const SAVE_TIMEOUT_MS = getSaveTimeout();
+        let saveAttempt = 0;
+        let res: Response | null = null;
 
-    while (saveAttempt < MAX_SAVE_RETRIES) {
-      saveAttempt++;
-      try {
-        const controller = new AbortController();
-        const timeout = window.setTimeout(() => controller.abort(), SAVE_TIMEOUT_MS);
-        res = await fetch("/api/save", { method: "POST", headers: { ...cacheStore.getHeaders(), "Content-Encoding": "gzip" }, body: compressed, signal: controller.signal }).finally(() => window.clearTimeout(timeout));
-        if (res.ok || res.status === 409 || res.status === 401) break;
-        if (saveAttempt < MAX_SAVE_RETRIES) {
-          const delay = Math.min(1000 * Math.pow(2, saveAttempt - 1), 5000);
-          await new Promise((r) => setTimeout(r, delay));
+        while (saveAttempt < MAX_SAVE_RETRIES) {
+          saveAttempt++;
+          try {
+            const controller = new AbortController();
+            const timeout = window.setTimeout(() => controller.abort(), SAVE_TIMEOUT_MS);
+            res = await fetch("/api/save", { method: "POST", headers: { ...cacheStore.getHeaders(), "Content-Encoding": "gzip" }, body: compressed, signal: controller.signal }).finally(() => window.clearTimeout(timeout));
+            if (res.ok || res.status === 409 || res.status === 401) break;
+            if (saveAttempt < MAX_SAVE_RETRIES) {
+              const delay = Math.min(1000 * Math.pow(2, saveAttempt - 1), 5000);
+              await new Promise((r) => setTimeout(r, delay));
+            }
+          } catch (e) {
+            if (e instanceof DOMException && e.name === "AbortError" && saveAttempt < MAX_SAVE_RETRIES) {
+              const delay = Math.min(1000 * Math.pow(2, saveAttempt - 1), 5000);
+              await new Promise((r) => setTimeout(r, delay));
+              continue;
+            }
+            throw e;
+          }
         }
-      } catch (e) {
-        if (e instanceof DOMException && e.name === "AbortError" && saveAttempt < MAX_SAVE_RETRIES) {
-          const delay = Math.min(1000 * Math.pow(2, saveAttempt - 1), 5000);
-          await new Promise((r) => setTimeout(r, delay));
-          continue;
-        }
-        throw e;
-      }
-    }
 
         if (!res) throw new Error(`Save failed after ${MAX_SAVE_RETRIES} retries`);
 
@@ -205,7 +205,7 @@ export const useSaveStore = defineStore("save", () => {
                 rssFeedsUnch = jsonEqual(rssFeeds.value, lb.rssFeeds || []);
                 rssCategoriesUnch = jsonEqual(rssCategories.value, lb.rssCategories || []);
               }
-            } catch {}
+            } catch { }
             if (!lChg && gUnch && rssFeedsUnch && rssCategoriesUnch) {
               dataVersion.value = v; await fetchData(); hasPendingSave.value = false; return "saved";
             }

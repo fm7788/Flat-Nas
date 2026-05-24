@@ -167,12 +167,6 @@ export const useMainStore = defineStore("main", () => {
         sync.dataVersion = v;
       },
     });
-  const applyMarketplaceItem = (item: Parameters<typeof widgetsStore.applyMarketplaceItem>[0]) => {
-    const changed = widgetsStore.applyMarketplaceItem(item, configStore.appConfig as unknown as Record<string, unknown>);
-    if (changed) {
-      updateCustomScripts();
-    }
-  };
 
   // ---- Sync / WS ----
   const isConnected = computed(() => sync.isConnected);
@@ -323,7 +317,6 @@ export const useMainStore = defineStore("main", () => {
     setWidgetUiState,
     saveWidget,
     saveSingleWidget,
-    applyMarketplaceItem,
     // Sync / WS
     isConnected,
     wsSend,

@@ -205,8 +205,10 @@ const init = async () => {
 
   if (effectiveKey) {
     await fetchWeather();
-  } else {
+  } else if (store.isLogged) {
     isConfiguring.value = true;
+  } else {
+    errorMsg.value = "请登录配置天气组件";
   }
 
   // Init selectors
@@ -296,6 +298,10 @@ const fetchWeather = async () => {
 };
 
 const saveConfig = async () => {
+  if (!store.isLogged) {
+    alert("请先登录再配置天气组件");
+    return;
+  }
   // eslint-disable-next-line vue/no-mutating-props
   if (!props.widget.data) props.widget.data = {};
   // eslint-disable-next-line vue/no-mutating-props
@@ -471,6 +477,7 @@ watch(
     <!-- Display Mode -->
     <div v-else class="relative z-10 flex flex-col h-full">
       <button
+        v-if="store.isLogged"
         @click="isConfiguring = true"
         class="absolute top-2 right-2 z-20 text-gray-500 hover:text-blue-600 transition-all bg-white/30 p-1 rounded-full opacity-0 group-hover:opacity-100"
       >

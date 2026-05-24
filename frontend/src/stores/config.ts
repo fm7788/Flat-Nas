@@ -4,8 +4,6 @@ import { useStorage } from "@vueuse/core";
 import type { AppConfig, SystemConfig } from "@/types";
 import { resolveManagedUrl } from "@/utils/runtimeUrls";
 
-const DEFAULT_MARKETPLACE_LIST_URL = "http://qdnas.icu:23111/";
-
 export const useConfigStore = defineStore("config", () => {
   // Pure client-only states (NOT synced to server)
   const forceNetworkMode = useStorage<"auto" | "lan" | "wan" | "latency">(
@@ -123,7 +121,6 @@ export const useConfigStore = defineStore("config", () => {
     customJsDisclaimerAgreed: false,
     mouseHoverEffect: "scale",
     autoUltrawide: false,
-    marketplaceListUrl: DEFAULT_MARKETPLACE_LIST_URL,
     networkRules: "",
     networkPresets: {
       tailscale: false,
