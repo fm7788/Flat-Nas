@@ -22,7 +22,7 @@ WORKDIR /app/frontend
 COPY frontend/package.json frontend/package-lock.json ./
 
 # Install dependencies
-RUN npm ci
+RUN npm ci --prefer-offline --no-audit --timeout=300000
 
 # Copy source code
 COPY frontend/ .
