@@ -326,9 +326,15 @@ export function useWallpaperRotation() {
 
       const uploadUrl =
         type === "pc" ? "/api/backgrounds/upload" : "/api/mobile_backgrounds/upload";
+
+      // 注意：必须移除 Content-Type，让浏览器自动设置 multipart/form-data + boundary
+      // 如果设置 Content-Type: application/json，后端 MultipartForm() 会解析失败返回 400
+      const uploadHeaders = store.getHeaders() as Record<string, string>;
+      delete uploadHeaders["Content-Type"];
+
       const uploadRes = await fetch(uploadUrl, {
         method: "POST",
-        headers: store.getHeaders() as Record<string, string>,
+        headers: uploadHeaders,
         body: formData,
       });
 

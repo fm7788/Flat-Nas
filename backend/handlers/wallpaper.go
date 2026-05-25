@@ -427,7 +427,8 @@ func UploadMobileBackground(c *gin.Context) {
 func uploadBackground(c *gin.Context, dir string, webPrefix string) {
 	form, err := c.MultipartForm()
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Bad Request"})
+		fmt.Printf("[UploadBackground] MultipartForm error: %v\n", err)
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Bad Request", "detail": err.Error()})
 		return
 	}
 
