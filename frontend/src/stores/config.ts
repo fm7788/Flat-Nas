@@ -48,8 +48,24 @@ export const useConfigStore = defineStore("config", () => {
     if (!url) return "";
     if (url.startsWith("data:") || url.startsWith("blob:")) return url;
     const resolved = resolveManagedUrl(url);
+    
+    // 壁纸资源已自带防缓存机制（文件名包含时间戳），
+    // 添加 ?t= 会导致外网代理/CDN 返回 409 Conflict，故直接返回干净 URL
+    if (isWallpaperPath(resolved)) {
+      return resolved;
+    }
+
+    // 其他资源保持原有的缓存破坏逻辑
     const connector = resolved.includes("?") ? "&" : "?";
     return `${resolved}${connector}t=${resourceVersion.value}`;
+  };
+
+  const isWallpaperPath = (url: string): boolean => {
+    const normalized = url.toLowerCase();
+    return (
+      normalized.includes("/backgrounds/") ||
+      normalized.includes("/mobile_backgrounds/")
+    );
   };
 
   const appConfig = ref<AppConfig>({

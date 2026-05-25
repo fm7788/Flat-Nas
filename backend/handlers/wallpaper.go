@@ -456,7 +456,8 @@ func uploadBackground(c *gin.Context, dir string, webPrefix string) {
 		targetMeta = store.MobileBackgrounds
 	}
 	for _, file := range files {
-		filename := filepath.Base(file.Filename)
+		ext := filepath.Ext(file.Filename)
+		filename := fmt.Sprintf("custom_%d%s", time.Now().UnixMilli(), ext)
 		if err := c.SaveUploadedFile(file, filepath.Join(dir, filename)); err != nil {
 			assetMetaMu.Unlock()
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to save " + filename})
